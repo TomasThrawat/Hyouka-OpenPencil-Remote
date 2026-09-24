@@ -38,6 +38,9 @@ export default defineConfig({
   outDir: './dist',
   deps: {
     neverBundle: [...new Set([...Object.keys(packageJSON.dependencies ?? {}), 'zod', /^node:/])],
+    dts: {
+      neverBundle: ['zod', /^zod\//]
+    },
     onlyBundle: false
   }
 })
