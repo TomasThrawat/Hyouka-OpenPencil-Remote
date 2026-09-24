@@ -1,10 +1,7 @@
 import * as v from 'valibot'
 
 import type { FigmaAPI } from '#core/figma-api'
-import {
-  getPluginData,
-  setPluginData
-} from '#core/figma-api/plugin-data'
+import { getPluginData, setPluginData } from '#core/figma-api/plugin-data'
 import type { SceneNode } from '@open-pencil/scene-graph'
 import { defineTool, nodeSummary } from '#core/tools/schema'
 
@@ -137,7 +134,7 @@ export const getCodeConnectMap = defineTool({
     const results = nodeIds.flatMap((id) => {
       const node = figma.graph.getNode(id)
       if (!node || (node.type !== 'COMPONENT' && node.type !== 'COMPONENT_SET')) return []
-      const mappings = Object.values(readStore(node))
+      const mappings = Object.values(readStore(node).mappings)
       if (mappings.length === 0) return []
       return [{ node: { id: node.id, name: node.name, type: node.type }, mappings }]
     })
