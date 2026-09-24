@@ -4,7 +4,7 @@ import { getActiveStore } from '@/app/tabs'
 let disconnect: (() => void) | null = null
 
 export function startRemoteCanvasBridge(): void {
-  if (!import.meta.env.PROD || import.meta.env.VITE_OPENPENCIL_REMOTE_MCP !== 'true') return
+  if (!import.meta.env.PROD) return
   if (disconnect) return
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'

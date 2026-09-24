@@ -33,10 +33,15 @@ export async function boot(): Promise<void> {
     return
   }
 
-  if (!IS_TAURI && import.meta.env.VITE_OPENPENCIL_REMOTE_MCP === 'true') {
+  // The web deployment owns the remote MCP bridge. Do not gate this behind a
+  // VITE_* build variable: when that variable is absent during CI, Vite can
+  // constant-fold the import away and silently ship an editor with no bridge.
+  if (!IS_TAURI && import.meta.env.PROD) {
     void import('./remote-mcp')
       .then(({ startRemoteCanvasBridge }) => startRemoteCanvasBridge())
-      .catch((error) => console.warn('[OpenPencil Remote] Bridge startup failed', error))
+      .catch((error) => {
+        console.warn('[OpenPencil Remote] Bridge startup failed', error)
+      })
   }
 
   if (!IS_TAURI) {
