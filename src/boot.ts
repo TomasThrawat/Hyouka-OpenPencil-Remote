@@ -26,10 +26,17 @@ export async function boot(): Promise<void> {
 
   await router.isReady()
   await nextTick()
+
   const failure = bootErrors.stop()
   if (failure) {
     await reportBootFailure(failure.error)
     return
+  }
+
+  if (!IS_TAURI && import.meta.env.VITE_OPENPENCIL_REMOTE_MCP === 'true') {
+    void import('./remote-mcp')
+      .then(({ startRemoteCanvasBridge }) => startRemoteCanvasBridge())
+      .catch((error) => console.warn('[OpenPencil Remote] Bridge startup failed', error))
   }
 
   if (!IS_TAURI) {

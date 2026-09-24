@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "framework": "vite",
+  "installCommand": "bun install --frozen-lockfile",
+  "buildCommand": "bun run build:packages && vite build",
+  "outputDirectory": "dist",
+  "env": {
+    "VITE_OPENPENCIL_REMOTE_MCP": "true"
+  }
+}
