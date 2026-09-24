@@ -7,7 +7,14 @@ import {
   diffCreate,
   diffShow
 } from './analyze'
-import { designToComponentMap, designToTokens } from './codegen'
+import {
+  addCodeConnectMap,
+  designToComponentMap,
+  designToTokens,
+  getCodeConnectMap,
+  removeCodeConnectMap
+} from './codegen'
+import { searchDesignSystem } from './design-system'
 import {
   createComponent,
   createInstance,
@@ -101,12 +108,7 @@ import {
   viewportSet
 } from './vector'
 
-/**
- * Extended tools not in CORE_TOOLS — variables, vector ops, analysis,
- * codegen, advanced structure, path manipulation, etc.
- */
 export const EXTENDED_TOOLS: ToolDef[] = [
-  // Read (advanced)
   getPageTree,
   getCurrentPage,
   listPages,
@@ -121,7 +123,8 @@ export const EXTENDED_TOOLS: ToolDef[] = [
   listFonts,
   listAvailableFonts,
   diffJSX,
-  // Create (advanced)
+  searchDesignSystem,
+  getCodeConnectMap,
   createShape,
   searchIconsTool,
   insertIcon,
@@ -134,7 +137,6 @@ export const EXTENDED_TOOLS: ToolDef[] = [
   createVector,
   createSlice,
   importSVG,
-  // Modify (advanced)
   setEffects,
   setOpacity,
   setFont,
@@ -148,7 +150,6 @@ export const EXTENDED_TOOLS: ToolDef[] = [
   setLocked,
   setStrokeAlign,
   setImageFill,
-  // Structure (advanced)
   cloneNode,
   nodeMove,
   renameNode,
@@ -163,7 +164,6 @@ export const EXTENDED_TOOLS: ToolDef[] = [
   nodeBindings,
   nodeReplaceWith,
   arrangeNodes,
-  // Variables
   listVariables,
   listCollections,
   getVariable,
@@ -176,7 +176,6 @@ export const EXTENDED_TOOLS: ToolDef[] = [
   getCollection,
   createCollection,
   deleteCollection,
-  // Vector & export
   booleanUnion,
   booleanSubtract,
   booleanIntersect,
@@ -191,7 +190,6 @@ export const EXTENDED_TOOLS: ToolDef[] = [
   exportSVG,
   exportPDF,
   exportImage,
-  // Analyze & diff
   analyzeColors,
   analyzeTypography,
   analyzeSpacing,
@@ -199,7 +197,8 @@ export const EXTENDED_TOOLS: ToolDef[] = [
   analyzeOverlaps,
   diffCreate,
   diffShow,
-  // Codegen
   designToTokens,
-  designToComponentMap
+  designToComponentMap,
+  addCodeConnectMap,
+  removeCodeConnectMap
 ]
