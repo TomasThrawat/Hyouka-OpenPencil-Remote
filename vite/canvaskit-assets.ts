@@ -60,16 +60,23 @@ export function copyCanvasKitAssetsPlugin(): Plugin {
         'node_modules/canvaskit-wasm/bin/canvaskit.wasm',
         'public/canvaskit.wasm'
       )
-      syncWasmFromNodeModules(
-        root,
-        'packages/core/vendor/canvaskit-webgpu/canvaskit.wasm',
-        'public/canvaskit-webgpu/canvaskit.wasm'
-      )
-      syncWasmFromNodeModules(
-        root,
-        'packages/core/vendor/canvaskit-webgpu/canvaskit.js',
-        'public/canvaskit-webgpu/canvaskit.js'
-      )
+      const webGpuWasm = resolve(root, 'packages/core/vendor/canvaskit-webgpu/canvaskit.wasm')
+      if (existsSync(webGpuWasm)) {
+        syncWasmFromNodeModules(
+          root,
+          'packages/core/vendor/canvaskit-webgpu/canvaskit.wasm',
+          'public/canvaskit-webgpu/canvaskit.wasm'
+        )
+      }
+
+      const webGpuJs = resolve(root, 'packages/core/vendor/canvaskit-webgpu/canvaskit.js')
+      if (existsSync(webGpuJs)) {
+        syncWasmFromNodeModules(
+          root,
+          'packages/core/vendor/canvaskit-webgpu/canvaskit.js',
+          'public/canvaskit-webgpu/canvaskit.js'
+        )
+      }
     },
     configureServer(server) {
       server.middlewares.use(serveCanvasKitWasm(server.config.root))
