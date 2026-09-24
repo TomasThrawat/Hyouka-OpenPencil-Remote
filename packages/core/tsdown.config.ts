@@ -30,15 +30,14 @@ export default defineConfig({
   unbundle: true,
   platform: 'neutral',
   format: ['esm'],
-  dts: true,
+  dts: {
+    resolver: 'tsc'
+  },
   sourcemap: true,
   clean: true,
   outDir: './dist',
   deps: {
     neverBundle: [...new Set([...Object.keys(packageJSON.dependencies ?? {}), 'zod', /^node:/])],
-    dts: {
-      neverBundle: ['zod']
-    },
     onlyBundle: false
   }
 })
