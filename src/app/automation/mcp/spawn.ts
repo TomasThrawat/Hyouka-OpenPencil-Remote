@@ -2,12 +2,12 @@ import { promiseTimeout } from '@vueuse/core'
 
 import { AUTOMATION_HTTP_PORT } from '@open-pencil/core/constants'
 import { randomHex } from '@open-pencil/core/random'
-import type { DiscoveryInfo } from '@open-pencil/mcp/discovery'
+import type { DiscoveryInfo } from './discovery-types'
 import {
   parseToolDescriptor,
   serializeDisabledTools,
   type ToolDescriptor
-} from '@open-pencil/mcp/tools'
+} from './tool-descriptor'
 
 import { decodeTauriStderr } from '@/app/shell/ui'
 import { resolvePlatformCommand } from '@/app/tauri/command'
@@ -169,7 +169,7 @@ async function computeExpectedDiscoveryPath(): Promise<string> {
   }
   // Linux: $XDG_RUNTIME_DIR/openpencil/mcp.json or ~/.openpencil/mcp.json.
   // In Tauri we don't have direct env access, so we use the home-directory
-  // fallback. The server may use XDG_RUNTIME_DIR if set — when the paths
+  // fallback. The server may use XDG_RUNTIME_DIR if set â when the paths
   // differ, resolveDiscoveryPath() falls back to the /health endpoint.
   return join(home, '.openpencil', 'mcp.json')
 }
@@ -310,7 +310,7 @@ export async function readAutomationHealth(
 }
 
 /**
- * Returns the major.minor portion of a semver string (e.g. "0.5.1" → "0.5").
+ * Returns the major.minor portion of a semver string (e.g. "0.5.1" â "0.5").
  * Returns null if the string is not parseable as semver.
  */
 function parseMajorMinor(version: string): string | null {
@@ -373,7 +373,7 @@ export async function getAutomationAuthToken(): Promise<string | null> {
     const fileExists = await discoveryFileExists(discoveryPath)
     if (!fileExists) {
       throw new Error(
-        `MCP server not yet ready — discovery file not found at ${discoveryPath}. ` +
+        `MCP server not yet ready â discovery file not found at ${discoveryPath}. ` +
           'Wait for the server to finish starting and try again.'
       )
     }
@@ -570,7 +570,7 @@ export async function spawnMCPIfNeeded(
  * Returns the user's home directory. Used as the default OPENPENCIL_MCP_ROOT
  * so file-scoped tools operate on paths inside ~, which is writable and
  * matches user expectations. Throws if the Tauri path plugin is unavailable
- * — this function is only invoked under !import.meta.env.DEV && isTauri(),
+ * â this function is only invoked under !import.meta.env.DEV && isTauri(),
  * so the Tauri path plugin should always succeed. A silent fallback to '/'
  * would defeat path scoping in resolveSafePath, and process.cwd() is
  * unpredictable and may also be too broad.
