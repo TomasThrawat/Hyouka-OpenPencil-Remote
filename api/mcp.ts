@@ -2,7 +2,6 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { WebSocketServer, WebSocket } from 'ws'
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server'
 import { registerTools } from '@open-pencil/mcp'
-import { createToolDescriptors } from '@open-pencil/mcp/tools'
 
 type Pending = {
   resolve: (value: unknown) => void
@@ -14,7 +13,8 @@ const pending = new Map<string, Pending>()
 let browser: WebSocket | null = null
 
 function sendRPC(body: Record<string, unknown>): Promise<unknown> {
-  if (!browser || browser.readyState !== WebSocket.OPEN) {
+  const socket = browser
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
     return Promise.reject(new Error('OpenPencil browser editor is not connected'))
   }
 
@@ -29,7 +29,7 @@ function sendRPC(body: Record<string, unknown>): Promise<unknown> {
     pending.set(id, { resolve, reject, timer })
 
     try {
-      browser.send(JSON.stringify({ ...body, type: 'request', id }))
+      socket.send(JSON.stringify({ ...body, type: 'request', id }))
     } catch (error) {
       clearTimeout(timer)
       pending.delete(id)
@@ -45,7 +45,10 @@ const mcpHandler = createMcpHandler(() => {
   )
 
   registerTools(server, {
-    policy: { disabledTools: [] },
+    policy: {
+      allowEval: false,
+      disabledTools: []
+    },
     mcpRoot: null,
     sendRPC
   })
@@ -118,8 +121,7 @@ const server = createServer(async (req, res) => {
         status: connected ? 'ok' : 'no_app',
         version: '0.15.1',
         authRequired: false,
-        browserConnected: connected,
-        tools: createToolDescriptors(false)
+        browserConnected: connected
       })
     )
     return
