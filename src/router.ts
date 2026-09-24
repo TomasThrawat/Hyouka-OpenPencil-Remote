@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import WorkspaceView from './views/WorkspaceView.vue'
+const WorkspaceView = () => import('./views/WorkspaceView.vue')
 
 const router = createRouter({
   history: createWebHistory(),

@@ -3,11 +3,16 @@ import { dirname, resolve } from 'node:path'
 
 import type { Connect, Plugin, ResolvedConfig } from 'vite'
 
-function syncWasmFromNodeModules(root: string, source: string, destination: string) {
+function syncWasmFromNodeModules(
+  root: string,
+  source: string,
+  destination: string,
+  optional = false
+) {
   const sourcePath = resolve(root, source)
   const destinationPath = resolve(root, destination)
   if (!existsSync(sourcePath)) {
-    console.warn(`[copy-canvaskit-wasm] Missing source (run \`bun install\`): ${sourcePath}`)
+    if (!optional) console.warn(`[copy-canvaskit-wasm] Missing source (run \`bun install\`): ${sourcePath}`)
     return
   }
   mkdirSync(dirname(destinationPath), { recursive: true })

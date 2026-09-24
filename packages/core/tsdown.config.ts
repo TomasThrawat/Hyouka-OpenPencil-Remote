@@ -34,6 +34,7 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   outDir: './dist',
+  external: ['zod'],
   deps: {
     neverBundle: [...Object.keys(packageJSON.dependencies ?? {}), /^node:/],
     onlyBundle: false

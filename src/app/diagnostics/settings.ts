@@ -1,6 +1,8 @@
 import { useLocalStorage } from '@vueuse/core'
 import { computed, ref } from 'vue'
 
+import { diagnostics } from './recorder'
+
 /**
  * Number of most recent events kept locally. Bounded rather than a closed set
  * so retention can be tuned beyond the offered presets.
@@ -45,7 +47,6 @@ export function useDiagnosticsSettings() {
     diagnosticsCount: computed(() => diagnosticsCount.value),
     diagnosticsSize: computed(() => diagnosticsSize.value),
     refreshDiagnosticsStats: async () => {
-      const { diagnostics } = await import('./recorder')
       const events = await diagnostics.list()
       diagnosticsCount.value = events.length
       diagnosticsSize.value = JSON.stringify(events).length
@@ -66,7 +67,6 @@ export function getDiagnosticsRetention(): DiagnosticsRetention {
 }
 
 export async function pruneDiagnostics(retention: DiagnosticsRetention): Promise<void> {
-  const { diagnostics } = await import('./recorder')
   await diagnostics.prune(retention)
 }
 

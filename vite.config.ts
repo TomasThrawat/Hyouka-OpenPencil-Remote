@@ -53,6 +53,9 @@ export default defineConfig(async ({ command }) => {
     build: {
       // Syntax is lowered to the supported browser baseline; APIs are not polyfilled.
       target: viteBuildTarget(),
+      rolldownOptions: {
+        external: ['@open-pencil/mcp', '@modelcontextprotocol/server', 'ws']
+      },
       chunkSizeWarningLimit: 2500
     },
     server: createDevServerOptions(host, __dirname)
