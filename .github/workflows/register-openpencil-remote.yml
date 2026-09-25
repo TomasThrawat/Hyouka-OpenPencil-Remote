@@ -7,7 +7,29 @@ jobs:
   register:
     runs-on: ubuntu-latest
     steps:
-      - name: Register custom MCP toolkit
+      - name: Replace old OpenPencil toolkit
+        env:
+          COMPOSIO_PROJECT_API_KEY: ${{ secrets.COMPOSIO_PROJECT_API_KEY }}
+        run: |
+          set -euo pipefail
+          delete_toolkit() {
+            local slug="$1"
+            local code
+            code="$(curl --silent --show-error \
+              --output /tmp/delete-response \
+              --write-out "%{http_code}" \
+              --request DELETE \
+              --url "https://backend.composio.dev/api/v3.1/custom/toolkits/${slug}" \
+              --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}")"
+            if [ "${code}" != "200" ] && [ "${code}" != "404" ]; then
+              cat /tmp/delete-response
+              exit 1
+            fi
+          }
+          delete_toolkit "CUSTOM_OPENPENCIL"
+          delete_toolkit "CUSTOM_OPENPENCIL_REMOTE"
+
+      - name: Register OpenPencil on the canonical slug
         env:
           COMPOSIO_PROJECT_API_KEY: ${{ secrets.COMPOSIO_PROJECT_API_KEY }}
         run: |
@@ -18,9 +40,9 @@ jobs:
             --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}" \
             --header "Content-Type: application/json" \
             --data '{
-              "slug": "OPENPENCIL_REMOTE",
+              "slug": "OPENPENCIL",
               "toolkit_config": {
-                "name": "OpenPencil Remote",
+                "name": "OpenPencil",
                 "app_url": "https://hyouka-openpencil-remote-v2.vercel.app/api/mcp",
                 "auth_schemes": [
                   { "mode": "NO_AUTH" }
@@ -28,7 +50,7 @@ jobs:
               }
             }'
 
-      - name: Sync custom MCP tools
+      - name: Sync OpenPencil tools
         env:
           COMPOSIO_PROJECT_API_KEY: ${{ secrets.COMPOSIO_PROJECT_API_KEY }}
         run: |
@@ -38,21 +60,15 @@ jobs:
             --url https://backend.composio.dev/api/v3.1/custom/toolkits/sync \
             --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}" \
             --header "Content-Type: application/json" \
-            --data '{"slug":"CUSTOM_OPENPENCIL_REMOTE"}'
+            --data '{"slug":"CUSTOM_OPENPENCIL"}'
 
-      - name: Verify registered toolkit and imported tools
+      - name: Verify canonical toolkit
         env:
           COMPOSIO_PROJECT_API_KEY: ${{ secrets.COMPOSIO_PROJECT_API_KEY }}
         run: |
           set -euo pipefail
           toolkit="$(curl --fail-with-body --silent --show-error \
             --request GET \
-            --url https://backend.composio.dev/api/v3.1/toolkits/CUSTOM_OPENPENCIL_REMOTE \
+            --url https://backend.composio.dev/api/v3.1/toolkits/CUSTOM_OPENPENCIL \
             --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}")"
-          tools="$(curl --fail-with-body --silent --show-error \
-            --request GET \
-            --url "https://backend.composio.dev/api/v3.1/tools?toolkit_slug=CUSTOM_OPENPENCIL_REMOTE" \
-            --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}")"
-          echo "TOOLKIT=${toolkit}" | cut -c1-1200
-          echo "${tools}" | jq -r '"TOOL_COUNT=" + ((.tools // .data // []) | length | tostring)'
-          echo "${tools}" | jq -r '(.tools // .data // [])[0:12] | .[]? | "TOOL=" + (.slug // .name // "unknown")'
+          echo "${toolkit}" | jq '{name,slug,type,base_url,enabled,tools_count:(.meta.tools_count),version:(.meta.version)}'
