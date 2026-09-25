@@ -339,7 +339,7 @@ pub fn run() {
 
     builder = builder.plugin(tauri_plugin_deep_link::init());
 
-    builder
+    builder = builder
         .manage(PendingOpen(Mutex::new(Vec::new())))
         .invoke_handler(tauri::generate_handler![
             build_fig_file,
@@ -371,7 +371,7 @@ pub fn run() {
         .plugin(tauri_plugin_os::init());
 
     #[cfg(not(target_os = "android"))]
-    let builder = builder.on_menu_event(|app, event| {
+    builder = builder.on_menu_event(|app, event| {
         handle_menu_event(app, event.id().0.as_str());
     });
 
