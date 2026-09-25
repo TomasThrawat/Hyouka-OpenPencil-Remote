@@ -9,29 +9,82 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Health
-        run: curl --fail-with-body --silent --show-error --max-time 30 https://hyouka-openpencil-remote-v2-mz5mw2hcm-hyouka1.vercel.app/api/health
-      - name: Debug MCP module import
+      - name: Wait for the production MCP to match this commit
+        env:
+          OPENPENCIL_MCP_URL: https://hyouka-openpencil-remote-v2.vercel.app/api/mcp
+          OPENPENCIL_HEALTH_URL: https://hyouka-openpencil-remote-v2.vercel.app/api/health
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          curl --fail-with-body --silent --show-error --max-time 30 https://hyouka-openpencil-remote-v2-mz5mw2hcm-hyouka1.vercel.app/api/debug-mcp | tee /tmp/debug.json
-          cat /tmp/debug.json
-          grep -q '"ok":' /tmp/debug.json
+          ready=0
+          for attempt in $(seq 1 90); do
+            health="$(curl --silent --show-error --max-time 30 "${OPENPENCIL_HEALTH_URL}?expected=${EXPECTED_SHA}" || true)"
+            mode="$(echo "${health}" | jq -r '.mode // empty' 2>/dev/null || true)"
+            commit="$(echo "${health}" | jq -r '.commit // empty' 2>/dev/null || true)"
+            echo "Production health probe ${attempt}/90: mode=${mode:-unknown} commit=${commit:-unknown}"
+            if [ "${mode}" = "headless" ] && [ "${commit}" = "${EXPECTED_SHA}" ]; then
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          if [ "${ready}" -ne 1 ]; then
+            echo "Production OpenPencil MCP did not expose the expected commit."
+            exit 1
+          fi
+
+      - name: Health
+        env:
+          OPENPENCIL_HEALTH_URL: https://hyouka-openpencil-remote-v2.vercel.app/api/health
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --max-time 30 "${OPENPENCIL_HEALTH_URL}?expected=${EXPECTED_SHA}" | tee /tmp/health.json
+          jq -e '.ok == true and .mode == "headless" and .commit == env.EXPECTED_SHA' /tmp/health.json
+
+      - name: Debug MCP module import
+        env:
+          OPENPENCIL_DEBUG_URL: https://hyouka-openpencil-remote-v2.vercel.app/api/debug-mcp
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --max-time 30 "${OPENPENCIL_DEBUG_URL}" | tee /tmp/debug.json
+          jq -e '.ok == true' /tmp/debug.json
+
       - name: MCP initialize
+        env:
+          OPENPENCIL_MCP_URL: https://hyouka-openpencil-remote-v2.vercel.app/api/mcp
         run: |
-          set -uo pipefail
-          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"github-actions-smoke","version":"1"}}}' https://hyouka-openpencil-remote-v2-mz5mw2hcm-hyouka1.vercel.app/api/mcp || true)"
-          echo "HTTP ${code}"; cat /tmp/h; echo '--- BODY ---'; cat /tmp/b
-          test "${code}" = 200
+          set -euo pipefail
+          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST             -H 'Content-Type: application/json'             -H 'Accept: application/json, text/event-stream'             --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"github-actions-smoke","version":"1"}}}'             "${OPENPENCIL_MCP_URL}" || true)"
+          echo "HTTP ${code}"
+          cat /tmp/h
+          echo '--- BODY ---'
+          cat /tmp/b
+          test "${code}" = "200"
+          jq -e '.jsonrpc == "2.0" and .result.serverInfo.name != null' /tmp/b
+
       - name: MCP tools list
+        env:
+          OPENPENCIL_MCP_URL: https://hyouka-openpencil-remote-v2.vercel.app/api/mcp
         run: |
-          set -uo pipefail
-          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' https://hyouka-openpencil-remote-v2-mz5mw2hcm-hyouka1.vercel.app/api/mcp || true)"
-          echo "HTTP ${code}"; cat /tmp/h; echo '--- BODY ---'; cat /tmp/b
-          test "${code}" = 200; grep -q 'list_documents' /tmp/b
+          set -euo pipefail
+          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST             -H 'Content-Type: application/json'             -H 'Accept: application/json, text/event-stream'             --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'             "${OPENPENCIL_MCP_URL}" || true)"
+          echo "HTTP ${code}"
+          cat /tmp/h
+          echo '--- BODY ---'
+          cat /tmp/b
+          test "${code}" = "200"
+          grep -q 'list_documents' /tmp/b
+
       - name: MCP tools call list_documents
+        env:
+          OPENPENCIL_MCP_URL: https://hyouka-openpencil-remote-v2.vercel.app/api/mcp
         run: |
-          set -uo pipefail
-          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_documents","arguments":{}}}' https://hyouka-openpencil-remote-v2-mz5mw2hcm-hyouka1.vercel.app/api/mcp || true)"
-          echo "HTTP ${code}"; cat /tmp/h; echo '--- BODY ---'; cat /tmp/b
-          test "${code}" = 200; grep -q 'OpenPencil Remote' /tmp/b
+          set -euo pipefail
+          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST             -H 'Content-Type: application/json'             -H 'Accept: application/json, text/event-stream'             --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_documents","arguments":{}}}'             "${OPENPENCIL_MCP_URL}" || true)"
+          echo "HTTP ${code}"
+          cat /tmp/h
+          echo '--- BODY ---'
+          cat /tmp/b
+          test "${code}" = "200"
+          grep -q '"jsonrpc":"2.0"' /tmp/b
