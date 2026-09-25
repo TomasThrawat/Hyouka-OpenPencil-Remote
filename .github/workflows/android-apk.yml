@@ -15,9 +15,12 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
+      - name: Configure Git default branch
+        run: git config --global init.defaultBranch main
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -27,17 +30,31 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools'
+      - name: Set up Android CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://dl.google.com/android/cli/latest/linux_x86_64/install.sh | bash
+          ANDROID_CLI="$(command -v android || true)"
+          if [ -z "$ANDROID_CLI" ]; then
+            ANDROID_CLI="$(find "$HOME" -type f -path '*/bin/android' -perm -u+x 2>/dev/null | head -n 1)"
+          fi
+          test -n "$ANDROID_CLI"
+          echo "$(dirname "$ANDROID_CLI")" >> "$GITHUB_PATH"
+          command -v android
+          android --version
 
       - name: Install Android build dependencies
         shell: bash
         run: |
-          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.16248370"
-          echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> "${GITHUB_ENV}"
-          echo "NDK_HOME=${ANDROID_SDK_ROOT}/ndk/30.0.16248370" >> "${GITHUB_ENV}"
+          set -euo pipefail
+          SDK_ROOT="$ANDROID_SDK_ROOT"
+          if [ -z "$SDK_ROOT" ]; then SDK_ROOT="$ANDROID_HOME"; fi
+          if [ -z "$SDK_ROOT" ]; then SDK_ROOT="/usr/local/lib/android/sdk"; fi
+          android --sdk="$SDK_ROOT" sdk install platform-tools platforms/android-36 build-tools/36.0.0 ndk/30.0.16248370
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$SDK_ROOT/ndk/30.0.16248370" >> "$GITHUB_ENV"
 
       - name: Set up Node.js 24
         uses: actions/setup-node@v7

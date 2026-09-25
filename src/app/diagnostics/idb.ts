@@ -2,7 +2,7 @@ import type { DBSchema } from 'idb'
 
 import { APP_DATABASE_NAMES, defineAppDatabase, openAppDatabase } from '@/app/storage/idb'
 
-import { getDiagnosticsRetention, type DiagnosticsRetention } from './settings'
+import { getDiagnosticsRetention, type DiagnosticsRetention } from './state'
 import type { DiagnosticCategory, DiagnosticEvent } from './types'
 
 interface DiagnosticsDatabase extends DBSchema {

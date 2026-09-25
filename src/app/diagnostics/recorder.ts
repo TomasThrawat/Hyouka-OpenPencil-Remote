@@ -3,7 +3,7 @@ import {
   getDiagnosticsRetention,
   isDiagnosticsEnabled,
   type DiagnosticsRetention
-} from './settings'
+} from './state'
 import type { DiagnosticEvent, DiagnosticEventInput } from './types'
 
 const MAX_MEMORY_EVENTS = 1000

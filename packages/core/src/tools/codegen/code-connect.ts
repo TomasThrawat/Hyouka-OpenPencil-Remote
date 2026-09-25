@@ -102,7 +102,7 @@ export const addCodeConnectMap = defineTool({
     setPluginData(figma.graph, node, CODE_CONNECT_KEY, JSON.stringify(store))
 
     return {
-      node: nodeSummary(figma.getNodeById(node.id)!),
+      node: nodeSummary(node),
       mapping,
       mappings: Object.values(store.mappings)
     }
@@ -170,19 +170,24 @@ export const removeCodeConnectMap = defineTool({
       (language === undefined || mapping.language === language)
 
     const before = Object.keys(store.mappings).length
-    for (const [key, mapping] of Object.entries(store.mappings)) {
-      if (shouldRemove(mapping)) delete store.mappings[key]
-    }
-    const removed = before - Object.keys(store.mappings).length
+    const remainingMappings = Object.fromEntries(
+      Object.entries(store.mappings).filter(([, mapping]) => !shouldRemove(mapping))
+    )
+    const removed = before - Object.keys(remainingMappings).length
 
     if (removed > 0) {
-      setPluginData(figma.graph, node, CODE_CONNECT_KEY, JSON.stringify(store))
+      setPluginData(
+        figma.graph,
+        node,
+        CODE_CONNECT_KEY,
+        JSON.stringify({ ...store, mappings: remainingMappings })
+      )
     }
 
     return {
-      node: nodeSummary(figma.getNodeById(node.id)!),
+      node: nodeSummary(node),
       removed,
-      remaining: Object.values(store.mappings)
+      remaining: Object.values(remainingMappings)
     }
   }
 })
