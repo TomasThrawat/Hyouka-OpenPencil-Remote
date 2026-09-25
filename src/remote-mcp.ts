@@ -1,16 +1,14 @@
 import { IS_BROWSER } from './constants'
+import type { createAutomationCommandHandlers } from '@/app/automation/bridge/handlers'
+import type { getActiveStore } from '@/app/tabs'
 
 let active = false
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let stopped = false
 let inFlight = false
 let loadingHandlers: Promise<{
-  handleRequest: (
-    store: unknown,
-    command: string,
-    args: unknown
-  ) => Promise<unknown>
-  getActiveStore: () => unknown
+  handleRequest: ReturnType<typeof createAutomationCommandHandlers>['handleRequest']
+  getActiveStore: typeof getActiveStore
 }> | null = null
 
 const POLL_INTERVAL_MS = 750
@@ -31,25 +29,21 @@ function schedulePoll(delayMs = POLL_INTERVAL_MS): void {
 }
 
 async function loadHandlers(): Promise<{
-  handleRequest: (
-    store: unknown,
-    command: string,
-    args: unknown
-  ) => Promise<unknown>
-  getActiveStore: () => unknown
+  handleRequest: ReturnType<typeof createAutomationCommandHandlers>['handleRequest']
+  getActiveStore: typeof getActiveStore
 }> {
   if (!loadingHandlers) {
     loadingHandlers = Promise.all([
       import('@/app/automation/bridge/figma-factory'),
       import('@/app/automation/bridge/handlers'),
-      import('@/app/tabs')
+      import('@/app/tabs'),
     ]).then(([figmaFactory, handlers, tabs]) => {
       const { handleRequest } = handlers.createAutomationCommandHandlers(
         figmaFactory.makeFigmaFromStore
       )
       return {
         handleRequest,
-        getActiveStore: tabs.getActiveStore
+        getActiveStore: tabs.getActiveStore,
       }
     })
   }
@@ -63,7 +57,7 @@ async function sendReply(body: Record<string, unknown>): Promise<void> {
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
       body: JSON.stringify(body),
-      keepalive: true
+      keepalive: true,
     })
   } catch (error) {
     console.warn('[OpenPencil Remote] Failed to send bridge response', error)
@@ -87,7 +81,7 @@ async function executeOperation(operation: {
     await sendReply({
       reqId: operation.reqId,
       ok: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
     })
   }
 }
@@ -101,7 +95,7 @@ async function poll(): Promise<void> {
       method: 'GET',
       cache: 'no-store',
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      headers: { Accept: 'application/json' }
+      headers: { Accept: 'application/json' },
     })
 
     if (response.status === 200) {
@@ -118,7 +112,7 @@ async function poll(): Promise<void> {
         await executeOperation({
           reqId: operation.reqId,
           command: operation.command,
-          args: operation.args
+          args: operation.args,
         })
       }
     } else if (response.status !== 204) {
