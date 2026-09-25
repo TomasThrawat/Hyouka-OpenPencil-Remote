@@ -21,13 +21,14 @@ declare global {
   var __OPENPENCIL_REMOTE_MCP_STATE__: RemoteMCPState | undefined
 }
 
-const state =
-  globalThis.__OPENPENCIL_REMOTE_MCP_STATE__ ??=
-    {
-      queue: [],
-      pending: new Map(),
-      seq: 0,
-      lastBrowserSeen: 0
-    }
+const state: RemoteMCPState =
+  globalThis.__OPENPENCIL_REMOTE_MCP_STATE__ ?? {
+    queue: [] as RemoteOperation[],
+    pending: new Map<string, PendingRequest>(),
+    seq: 0,
+    lastBrowserSeen: 0
+  }
+
+globalThis.__OPENPENCIL_REMOTE_MCP_STATE__ = state
 
 export default state
