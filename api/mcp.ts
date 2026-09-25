@@ -39,7 +39,7 @@ async function getMcpHandler() {
       const [{ createMcpHandler, McpServer }, { registerTools }, { sendHeadlessRPC }] = await Promise.all([
         import('@modelcontextprotocol/server'),
         import('@open-pencil/mcp'),
-        import('./headless'),
+        import('./headless.js'),
       ])
 
       return createMcpHandler(() => {
