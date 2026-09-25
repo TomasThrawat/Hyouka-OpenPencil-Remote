@@ -2,15 +2,23 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024
 
 function cors(res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Mcp-Session-Id, Mcp-Protocol-Version')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, Mcp-Session-Id, Mcp-Protocol-Version',
+  )
+  res.setHeader(
+    'Access-Control-Allow-Methods',
+    'GET, POST, DELETE, OPTIONS',
+  )
 }
 
 async function readBody(req: any): Promise<Buffer> {
   if (req.body !== undefined && req.body !== null) {
     return Buffer.isBuffer(req.body)
       ? req.body
-      : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body))
+      : Buffer.from(
+          typeof req.body === 'string' ? req.body : JSON.stringify(req.body),
+        )
   }
   const chunks: Buffer[] = []
   let size = 0
@@ -36,7 +44,11 @@ let mcpHandlerPromise: Promise<any> | null = null
 async function getMcpHandler() {
   if (!mcpHandlerPromise) {
     mcpHandlerPromise = (async () => {
-      const [{ createMcpHandler, McpServer }, { registerTools }, { sendHeadlessRPC }] = await Promise.all([
+      const [
+        { createMcpHandler, McpServer },
+        { registerTools },
+        { sendHeadlessRPC },
+      ] = await Promise.all([
         import('@modelcontextprotocol/server'),
         import('@open-pencil/mcp'),
         import('./headless.js'),
@@ -75,7 +87,10 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readBody(req)
+    const body =
+      req.method === 'GET' || req.method === 'HEAD'
+        ? undefined
+        : await readBody(req)
     const headers = new Headers()
     for (const [key, value] of Object.entries(req.headers ?? {})) {
       if (Array.isArray(value)) headers.set(key, value.join(', '))
@@ -85,7 +100,8 @@ export default async function handler(req: any, res: any) {
     const hostHeader = req.headers?.host
     const host = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader
     const protoHeader = req.headers?.['x-forwarded-proto']
-    const proto = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || 'https'
+    const proto =
+      (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || 'https'
     const incomingUrl = typeof req.url === 'string' ? req.url : '/api/mcp'
     const requestUrl = /^https?:\/\//i.test(incomingUrl)
       ? incomingUrl
@@ -102,9 +118,11 @@ export default async function handler(req: any, res: any) {
     console.error('OpenPencil MCP request failure', error)
     res.statusCode = 500
     res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({
-      error: error instanceof Error ? error.message : String(error),
-      name: error instanceof Error ? error.name : typeof error,
-    }))
+    res.end(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : typeof error,
+      }),
+    )
   }
 }
