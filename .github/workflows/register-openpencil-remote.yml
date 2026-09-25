@@ -1,0 +1,41 @@
+name: Register OpenPencil Remote MCP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Register custom MCP toolkit
+        env:
+          COMPOSIO_PROJECT_API_KEY: ${{ secrets.COMPOSIO_PROJECT_API_KEY }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --url https://backend.composio.dev/api/v3.1/custom/toolkits/upsert \
+            --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}" \
+            --header "Content-Type: application/json" \
+            --data '{
+              "slug": "OPENPENCIL_REMOTE",
+              "toolkit_config": {
+                "name": "OpenPencil Remote",
+                "app_url": "https://hyouka-openpencil-remote-v2.vercel.app/api/mcp",
+                "auth_schemes": [
+                  { "mode": "NO_AUTH" }
+                ]
+              }
+            }'
+
+      - name: Sync custom MCP tools
+        env:
+          COMPOSIO_PROJECT_API_KEY: ${{ secrets.COMPOSIO_PROJECT_API_KEY }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --url https://backend.composio.dev/api/v3.1/custom/toolkits/sync \
+            --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}" \
+            --header "Content-Type: application/json" \
+            --data '{"slug":"CUSTOM_OPENPENCIL_REMOTE"}'
