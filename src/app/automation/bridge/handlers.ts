@@ -6,7 +6,7 @@ import {
   handleCloseFile,
   handleNewDocument,
   handleOpenFile,
-  handleSaveFile
+  handleSaveFile,
 } from '@/app/automation/bridge/file-handlers'
 import { handleRPCFallback } from '@/app/automation/bridge/rpc-handler'
 import { handleSelection } from '@/app/automation/bridge/selection-handler'
@@ -15,7 +15,7 @@ import {
   listAutomationDocuments,
   resolveAutomationTarget,
   responseWithTarget,
-  stripAutomationTargetArgs
+  stripAutomationTargetArgs,
 } from '@/app/automation/bridge/target'
 import { createAutomationToolHandler } from '@/app/automation/bridge/tool-handlers'
 import type { EditorStore } from '@/app/editor/active-store'
@@ -24,7 +24,7 @@ type FigmaFactory = (store: EditorStore, pageId?: string) => FigmaAPI
 
 type CommandHandler = (
   target: ReturnType<typeof resolveAutomationTarget>,
-  args: unknown
+  args: unknown,
 ) => Promise<unknown>
 
 export function createAutomationCommandHandlers(makeFigma: FigmaFactory) {
@@ -40,13 +40,13 @@ export function createAutomationCommandHandlers(makeFigma: FigmaFactory) {
     save_file: handleSaveFile,
     close_file: handleCloseFile,
     new_document: handleNewDocument,
-    open_file: handleOpenFile
+    open_file: handleOpenFile,
   }
 
   async function handleRequest(
     store: EditorStore,
     command: string,
-    args: unknown
+    args: unknown,
   ): Promise<unknown> {
     if (command === 'list_documents') {
       return { ok: true, result: { documents: listAutomationDocuments(store) } }
@@ -54,7 +54,10 @@ export function createAutomationCommandHandlers(makeFigma: FigmaFactory) {
 
     if (command === 'open_file' || command === 'new_document') {
       const handler = commandHandlers[command]
-      if (handler) return handler(resolveAutomationTarget(store, undefined), args)
+      if (handler) return handler(
+        resolveAutomationTarget(store, undefined),
+        args,
+      )
     }
 
     const rawArgs = isUnknownRecord(args) ? args : {}
