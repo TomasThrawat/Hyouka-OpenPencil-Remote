@@ -12,14 +12,12 @@ type HeadlessDocument = {
   lock: Promise<void>
 }
 
-type RpcTarget = {
-  document_id?: string
-  page_id?: string
-}
-
 type RpcBody = {
   command?: string
-  args?: Record<string, unknown> & RpcTarget
+  args?: Record<string, unknown> & {
+    document_id?: string
+    page_id?: string
+  }
 }
 
 const documents = new Map<string, HeadlessDocument>()
@@ -108,12 +106,10 @@ async function executeTool(
   const { figma, page } = createFigmaAPI(doc.editor, pageId)
 
   if (isAtomicTool(def)) {
-    return executeAtomicTool(doc.editor as never, figma, def, args, {
-      label: name,
-    })
+    return executeAtomicTool(doc.editor, figma, def, args, { label: name })
   }
 
-  if (def.effect === 'write') {
+  if (def.mutates) {
     return await doc.editor.runMutationWithLayout(
       () => def.execute(figma, args),
       page.id,
@@ -167,6 +163,13 @@ export async function sendHeadlessRPC(body: RpcBody) {
 
   if (command === 'close_file') {
     const doc = getDocument(typeof args.document_id === 'string' ? args.document_id : undefined)
+    const target = {
+      documentId: doc.id,
+      documentName: doc.name,
+      pageId: getPage(doc.editor, typeof args.page_id === 'string' ? args.page_id : undefined).id,
+      pageName: getPage(doc.editor, typeof args.page_id === 'string' ? args.page_id : undefined).name,
+    }
+
     return withDocumentLock(doc, async () => {
       documents.delete(doc.id)
       if (activeDocumentId === doc.id) {
@@ -177,12 +180,7 @@ export async function sendHeadlessRPC(body: RpcBody) {
       return {
         ok: true,
         result: { closed: true },
-        target: {
-          documentId: doc.id,
-          documentName: doc.name,
-          pageId: getPage(doc.editor, typeof args.page_id === 'string' ? args.page_id : undefined).id,
-          pageName: getPage(doc.editor, typeof args.page_id === 'string' ? args.page_id : undefined).name,
-        },
+        target,
       }
     })
   }
