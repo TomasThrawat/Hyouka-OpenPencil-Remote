@@ -39,3 +39,20 @@ jobs:
             --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}" \
             --header "Content-Type: application/json" \
             --data '{"slug":"CUSTOM_OPENPENCIL_REMOTE"}'
+
+      - name: Verify registered toolkit and imported tools
+        env:
+          COMPOSIO_PROJECT_API_KEY: ${{ secrets.COMPOSIO_PROJECT_API_KEY }}
+        run: |
+          set -euo pipefail
+          toolkit="$(curl --fail-with-body --silent --show-error \
+            --request GET \
+            --url https://backend.composio.dev/api/v3.1/toolkits/CUSTOM_OPENPENCIL_REMOTE \
+            --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}")"
+          tools="$(curl --fail-with-body --silent --show-error \
+            --request GET \
+            --url "https://backend.composio.dev/api/v3.1/tools?toolkit_slug=CUSTOM_OPENPENCIL_REMOTE" \
+            --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}")"
+          echo "TOOLKIT=${toolkit}" | cut -c1-1200
+          echo "${tools}" | jq -r '"TOOL_COUNT=" + ((.tools // .data // []) | length | tostring)'
+          echo "${tools}" | jq -r '(.tools // .data // [])[0:12] | .[]? | "TOOL=" + (.slug // .name // "unknown")'
