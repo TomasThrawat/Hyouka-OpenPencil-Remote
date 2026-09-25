@@ -10,28 +10,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Health
-        run: curl --fail-with-body --silent --show-error --max-time 30 https://hyouka-openpencil-remote-v2-afjgh21c8-hyouka1.vercel.app/api/health
+        run: curl --fail-with-body --silent --show-error --max-time 30 https://hyouka-openpencil-remote-v2-mz5mw2hcm-hyouka1.vercel.app/api/health
       - name: Debug MCP module import
         run: |
           set -euo pipefail
-          curl --fail-with-body --silent --show-error --max-time 30 https://hyouka-openpencil-remote-v2-afjgh21c8-hyouka1.vercel.app/api/debug-mcp | tee /tmp/debug.json
+          curl --fail-with-body --silent --show-error --max-time 30 https://hyouka-openpencil-remote-v2-mz5mw2hcm-hyouka1.vercel.app/api/debug-mcp | tee /tmp/debug.json
           cat /tmp/debug.json
           grep -q '"ok":' /tmp/debug.json
       - name: MCP initialize
         run: |
           set -uo pipefail
-          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"github-actions-smoke","version":"1"}}}' https://hyouka-openpencil-remote-v2-afjgh21c8-hyouka1.vercel.app/api/mcp || true)"
+          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"github-actions-smoke","version":"1"}}}' https://hyouka-openpencil-remote-v2-mz5mw2hcm-hyouka1.vercel.app/api/mcp || true)"
           echo "HTTP ${code}"; cat /tmp/h; echo '--- BODY ---'; cat /tmp/b
           test "${code}" = 200
       - name: MCP tools list
         run: |
           set -uo pipefail
-          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' https://hyouka-openpencil-remote-v2-afjgh21c8-hyouka1.vercel.app/api/mcp || true)"
+          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' https://hyouka-openpencil-remote-v2-mz5mw2hcm-hyouka1.vercel.app/api/mcp || true)"
           echo "HTTP ${code}"; cat /tmp/h; echo '--- BODY ---'; cat /tmp/b
           test "${code}" = 200; grep -q 'list_documents' /tmp/b
       - name: MCP tools call list_documents
         run: |
           set -uo pipefail
-          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_documents","arguments":{}}}' https://hyouka-openpencil-remote-v2-afjgh21c8-hyouka1.vercel.app/api/mcp || true)"
+          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_documents","arguments":{}}}' https://hyouka-openpencil-remote-v2-mz5mw2hcm-hyouka1.vercel.app/api/mcp || true)"
           echo "HTTP ${code}"; cat /tmp/h; echo '--- BODY ---'; cat /tmp/b
           test "${code}" = 200; grep -q 'OpenPencil Remote' /tmp/b
