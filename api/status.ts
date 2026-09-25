@@ -1,4 +1,4 @@
-import state from './_state'
+import state from './_state.js'
 
 export default function handler(req: any, res: any): void {
   if (req.method !== 'GET') {

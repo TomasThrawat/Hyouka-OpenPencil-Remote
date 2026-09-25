@@ -1,4 +1,4 @@
-import state from './_state'
+import state from './_state.js'
 
 function cors(res: any): void {
   res.setHeader('Access-Control-Allow-Origin', '*')

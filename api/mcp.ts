@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server'
 import { registerTools } from '@open-pencil/mcp'
 
-import state, { type RemoteOperation } from './_state'
+import state, { type RemoteOperation } from './_state.js'
 
 const MCP_WAIT_TIMEOUT_MS = 50_000
 const MAX_QUEUE_LENGTH = 64
