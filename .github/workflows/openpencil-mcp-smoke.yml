@@ -3,6 +3,8 @@ name: OpenPencil MCP Smoke Test
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - '.github/workflows/**'
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -14,33 +16,28 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for the production MCP to match this commit
+      - name: Wait for production MCP
         env:
-          OPENPENCIL_MCP_URL: https://hyouka-openpencil-remote-v2-hyouka1.vercel.app/api/mcp
           OPENPENCIL_HEALTH_URL: https://hyouka-openpencil-remote-v2-hyouka1.vercel.app/api/health
+          OPENPENCIL_MCP_URL: https://hyouka-openpencil-remote-v2-hyouka1.vercel.app/api/mcp
           EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
         run: |
           set -euo pipefail
-          ready=0
           for attempt in $(seq 1 90); do
-            health="$(curl --silent --show-error --max-time 30 "${OPENPENCIL_HEALTH_URL}?expected=${EXPECTED_SHA}" || true)"
+            health="$(curl --silent --show-error --max-time 30 "${OPENPENCIL_HEALTH_URL}" || true)"
             mode="$(echo "${health}" | jq -r '.mode // empty' 2>/dev/null || true)"
             commit="$(echo "${health}" | jq -r '.commit // empty' 2>/dev/null || true)"
-            echo "Production health probe ${attempt}/90: mode=${mode:-unknown} commit=${commit:-unknown}"
+            echo "Production probe ${attempt}/90: mode=${mode:-unknown} commit=${commit:-unknown}"
             if [ "${mode}" = "headless" ] && [ "${commit}" = "${EXPECTED_SHA}" ]; then
               code="$(curl --silent --output /dev/null --write-out "%{http_code}" --request OPTIONS "${OPENPENCIL_MCP_URL}" || true)"
-              echo "Production MCP OPTIONS: HTTP ${code}"
-              if [ "${code}" = "204" ]; then
-                ready=1
-                break
-              fi
+              echo "MCP OPTIONS: HTTP ${code}"
+              test "${code}" = "204"
+              exit 0
             fi
             sleep 10
           done
-          if [ "${ready}" -ne 1 ]; then
-            echo "Production OpenPencil MCP did not expose the expected headless commit."
-            exit 1
-          fi
+          echo "Production MCP did not expose the expected deployment."
+          exit 1
 
       - name: Health
         env:
@@ -48,7 +45,7 @@ jobs:
           EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
         run: |
           set -euo pipefail
-          curl --fail-with-body --silent --show-error --max-time 30 "${OPENPENCIL_HEALTH_URL}?expected=${EXPECTED_SHA}" | tee /tmp/health.json
+          curl --fail-with-body --silent --show-error --max-time 30 "${OPENPENCIL_HEALTH_URL}" | tee /tmp/health.json
           jq -e '.ok == true and .mode == "headless" and .commit == env.EXPECTED_SHA' /tmp/health.json
 
       - name: MCP initialize
@@ -56,36 +53,33 @@ jobs:
           OPENPENCIL_MCP_URL: https://hyouka-openpencil-remote-v2-hyouka1.vercel.app/api/mcp
         run: |
           set -euo pipefail
-          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST             -H 'Content-Type: application/json'             -H 'Accept: application/json, text/event-stream'             -H 'MCP-Protocol-Version: 2025-06-18'             --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"github-actions-smoke","version":"1"}}}'             "${OPENPENCIL_MCP_URL}" || true)"
+          code="$(curl --silent --show-error --max-time 30 -o /tmp/body -w '%{http_code}' -X POST             -H 'Content-Type: application/json'             -H 'Accept: application/json, text/event-stream'             -H 'MCP-Protocol-Version: 2025-06-18'             --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"github-actions-smoke","version":"1"}}}'             "${OPENPENCIL_MCP_URL}" || true)"
           echo "HTTP ${code}"
-          cat /tmp/h
-          echo '--- BODY ---'
-          cat /tmp/b
+          cat /tmp/body
           test "${code}" = "200"
-          jq -e '.jsonrpc == "2.0" and .result.serverInfo.name != null' /tmp/b
+          payload="$(sed -n 's/^data: //p' /tmp/body | tail -n 1)"
+          printf '%s' "${payload}" | jq -e '.jsonrpc == "2.0" and .result.serverInfo.name == "open-pencil-remote"'
 
       - name: MCP tools list
         env:
           OPENPENCIL_MCP_URL: https://hyouka-openpencil-remote-v2-hyouka1.vercel.app/api/mcp
         run: |
           set -euo pipefail
-          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST             -H 'Content-Type: application/json'             -H 'Accept: application/json, text/event-stream'             -H 'MCP-Protocol-Version: 2025-06-18'             --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'             "${OPENPENCIL_MCP_URL}" || true)"
+          code="$(curl --silent --show-error --max-time 30 -o /tmp/body -w '%{http_code}' -X POST             -H 'Content-Type: application/json'             -H 'Accept: application/json, text/event-stream'             -H 'MCP-Protocol-Version: 2025-06-18'             --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'             "${OPENPENCIL_MCP_URL}" || true)"
           echo "HTTP ${code}"
-          cat /tmp/h
-          echo '--- BODY ---'
-          cat /tmp/b
+          cat /tmp/body
           test "${code}" = "200"
-          jq -e '.jsonrpc == "2.0" and (.result.tools | type == "array") and any(.result.tools[]; .name == "list_documents")' /tmp/b
+          payload="$(sed -n 's/^data: //p' /tmp/body | tail -n 1)"
+          printf '%s' "${payload}" | jq -e '.jsonrpc == "2.0" and any(.result.tools[]; .name == "list_documents")'
 
       - name: MCP tools call list_documents
         env:
           OPENPENCIL_MCP_URL: https://hyouka-openpencil-remote-v2-hyouka1.vercel.app/api/mcp
         run: |
           set -euo pipefail
-          code="$(curl --silent --show-error --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST             -H 'Content-Type: application/json'             -H 'Accept: application/json, text/event-stream'             -H 'MCP-Protocol-Version: 2025-06-18'             --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_documents","arguments":{}}}'             "${OPENPENCIL_MCP_URL}" || true)"
+          code="$(curl --silent --show-error --max-time 30 -o /tmp/body -w '%{http_code}' -X POST             -H 'Content-Type: application/json'             -H 'Accept: application/json, text/event-stream'             -H 'MCP-Protocol-Version: 2025-06-18'             --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_documents","arguments":{}}}'             "${OPENPENCIL_MCP_URL}" || true)"
           echo "HTTP ${code}"
-          cat /tmp/h
-          echo '--- BODY ---'
-          cat /tmp/b
+          cat /tmp/body
           test "${code}" = "200"
-          jq -e '.jsonrpc == "2.0" and .result.isError != true' /tmp/b
+          payload="$(sed -n 's/^data: //p' /tmp/body | tail -n 1)"
+          printf '%s' "${payload}" | jq -e '.jsonrpc == "2.0" and .result.isError != true'
