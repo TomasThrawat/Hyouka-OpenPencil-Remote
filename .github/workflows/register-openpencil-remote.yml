@@ -4,72 +4,72 @@ on:
   push:
     branches:
       - master
+    paths-ignore:
+      - '.github/workflows/**'
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: "Optional deployed commit SHA to register"
+        required: false
+        type: string
 
 jobs:
   register:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for the production MCP to match this commit
+      - name: Wait for production MCP
         env:
           OPENPENCIL_MCP_URL: https://hyouka-openpencil-remote-v2-hyouka1.vercel.app/api/mcp
           OPENPENCIL_HEALTH_URL: https://hyouka-openpencil-remote-v2-hyouka1.vercel.app/api/health
-          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
         run: |
           set -euo pipefail
-          ready=0
           for attempt in $(seq 1 90); do
-            health="$(curl --silent --show-error --fail "${OPENPENCIL_HEALTH_URL}?expected=${EXPECTED_SHA}" || true)"
-            commit="$(echo "${health}" | jq -r '.commit // empty' 2>/dev/null || true)"
+            health="$(curl --silent --show-error --max-time 30 "${OPENPENCIL_HEALTH_URL}" || true)"
             mode="$(echo "${health}" | jq -r '.mode // empty' 2>/dev/null || true)"
-            echo "Production health probe ${attempt}/90: mode=${mode:-unknown} commit=${commit:-unknown}"
-            if [ "${mode}" = "headless" ] && [ "${commit}" = "${EXPECTED_SHA}" ]; then
+            commit="$(echo "${health}" | jq -r '.commit // empty' 2>/dev/null || true)"
+            echo "Production probe ${attempt}/90: mode=${mode:-unknown} commit=${commit:-unknown}"
+            if [ "${mode}" = "headless" ] && { [ -z "${EXPECTED_SHA}" ] || [ "${commit}" = "${EXPECTED_SHA}" ]; }; then
               code="$(curl --silent --output /dev/null --write-out "%{http_code}" --request OPTIONS "${OPENPENCIL_MCP_URL}" || true)"
-              echo "Production MCP OPTIONS: HTTP ${code}"
-              if [ "${code}" = "204" ]; then
-                ready=1
-                break
-              fi
+              test "${code}" = "204"
+              exit 0
             fi
             sleep 10
           done
-          if [ "${ready}" -ne 1 ]; then
-            echo "Production OpenPencil MCP did not expose the expected headless commit."
-            exit 1
-          fi
+          echo "Production MCP did not expose the expected deployment."
+          exit 1
 
-      - name: Replace old OpenPencil toolkit
+      - name: Upsert OpenPencil custom toolkit
         env:
           COMPOSIO_PROJECT_API_KEY: ${{ secrets.COMPOSIO_PROJECT_API_KEY }}
         run: |
           set -euo pipefail
-          delete_toolkit() {
-            local slug="$1"
-            local code
-            code="$(curl --silent --show-error --output /tmp/delete-response --write-out "%{http_code}"               --request DELETE               --url "https://backend.composio.dev/api/v3.1/custom/toolkits/${slug}"               --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}")"
-            if [ "${code}" != "200" ] && [ "${code}" != "404" ]; then
-              cat /tmp/delete-response
-              exit 1
+          payload='{
+            "slug": "OPENPENCIL",
+            "toolkit_config": {
+              "name": "OpenPencil",
+              "app_url": "https://hyouka-openpencil-remote-v2-hyouka1.vercel.app/api/mcp",
+              "auth_schemes": [
+                { "mode": "NO_AUTH" }
+              ]
+            }
+          }'
+          success=0
+          for attempt in $(seq 1 8); do
+            code="$(curl --silent --show-error --output /tmp/upsert-response --write-out "%{http_code}"               --request POST               --url https://backend.composio.dev/api/v3.1/custom/toolkits/upsert               --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}"               --header "Content-Type: application/json"               --data "${payload}" || true)"
+            echo "Upsert ${attempt}/8: HTTP ${code}"
+            cat /tmp/upsert-response
+            if [ "${code}" = "200" ]; then
+              success=1
+              break
             fi
-          }
-          delete_toolkit "CUSTOM_OPENPENCIL"
-          delete_toolkit "CUSTOM_OPENPENCIL_REMOTE"
-
-      - name: Register OpenPencil on the canonical slug
-        env:
-          COMPOSIO_PROJECT_API_KEY: ${{ secrets.COMPOSIO_PROJECT_API_KEY }}
-        run: |
-          set -euo pipefail
-          curl --fail-with-body --silent --show-error             --request POST             --url https://backend.composio.dev/api/v3.1/custom/toolkits/upsert             --header "x-api-key: ${COMPOSIO_PROJECT_API_KEY}"             --header "Content-Type: application/json"             --data '{
-              "slug": "OPENPENCIL",
-              "toolkit_config": {
-                "name": "OpenPencil",
-                "app_url": "https://hyouka-openpencil-remote-v2-hyouka1.vercel.app/api/mcp",
-                "auth_schemes": [
-                  { "mode": "NO_AUTH" }
-                ]
-              }
-            }'
+            if [ "${code}" = "400" ] || [ "${code}" = "409" ]; then
+              sleep 5
+              continue
+            fi
+            exit 1
+          done
+          test "${success}" -eq 1
 
       - name: Sync OpenPencil tools
         env:
@@ -90,5 +90,5 @@ jobs:
           echo "${toolkit}" | jq '{name,slug,type,base_url,enabled,tools_count:(.meta.tools_count),version:(.meta.version)}'
           test "$(echo "${toolkit}" | jq -r '.slug | ascii_downcase')" = "custom_openpencil"
           test "$(echo "${toolkit}" | jq -r '.enabled')" = "true"
+          test "$(echo "${toolkit}" | jq -r '.base_url')" = "https://hyouka-openpencil-remote-v2-hyouka1.vercel.app/api/mcp"
           test "$(echo "${toolkit}" | jq -r '.meta.tools_count')" -gt 0
-          test "$(echo "${toolkit}" | jq -r '.meta.version // empty')" != ""
