@@ -23,7 +23,7 @@ type RpcBody = {
 const documents = new Map<string, HeadlessDocument>()
 let activeDocumentId: string | null = null
 
-function makeDocument(name = 'OpenPencil Remote') {
+function makeDocument(name = 'OpenPencil Remote', path?: string) {
   const graph = new SceneGraph()
   const editor = createEditor({
     graph,
@@ -33,6 +33,7 @@ function makeDocument(name = 'OpenPencil Remote') {
   const doc: HeadlessDocument = {
     id: randomUUID(),
     name,
+    ...(path ? { path } : {}),
     editor,
     lock: Promise.resolve(),
   }
@@ -152,7 +153,10 @@ export async function sendHeadlessRPC(body: RpcBody) {
     const name = typeof args.name === 'string' && args.name.trim()
       ? args.name.trim()
       : 'OpenPencil Remote'
-    const doc = makeDocument(name)
+    const path = typeof args.path === 'string' && args.path.trim()
+      ? args.path.trim()
+      : undefined
+    const doc = makeDocument(name, path)
     activeDocumentId = doc.id
     return {
       ok: true,
@@ -163,11 +167,13 @@ export async function sendHeadlessRPC(body: RpcBody) {
 
   if (command === 'close_file') {
     const doc = getDocument(typeof args.document_id === 'string' ? args.document_id : undefined)
+    const pageId = typeof args.page_id === 'string' ? args.page_id : undefined
+    const page = getPage(doc.editor, pageId)
     const target = {
       documentId: doc.id,
       documentName: doc.name,
-      pageId: getPage(doc.editor, typeof args.page_id === 'string' ? args.page_id : undefined).id,
-      pageName: getPage(doc.editor, typeof args.page_id === 'string' ? args.page_id : undefined).name,
+      pageId: page.id,
+      pageName: page.name,
     }
 
     return withDocumentLock(doc, async () => {
@@ -216,8 +222,4 @@ export async function sendHeadlessRPC(body: RpcBody) {
   }
 
   throw new Error(`Unknown RPC command "${command}"`)
-}
-
-if (documents.size === 0) {
-  makeDocument()
 }
