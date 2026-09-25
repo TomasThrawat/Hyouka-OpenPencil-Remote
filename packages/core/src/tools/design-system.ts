@@ -68,7 +68,6 @@ export const searchDesignSystem = defineTool({
               component.source === 'library'
                 ? `${component.libraryId}:${component.assetKey}`
                 : component.id,
-            name: component.name,
             score: scoreName(component.name, query),
             ...component
           })
