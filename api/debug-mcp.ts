@@ -1,9 +1,13 @@
+import mcpHandler from './mcp'
+
 export default async function handler(_req: any, res: any) {
   try {
-    const mod = await import('./mcp')
     res.statusCode = 200
     res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ ok: true, exports: Object.keys(mod) }))
+    res.end(JSON.stringify({
+      ok: true,
+      handlerType: typeof mcpHandler,
+    }))
   } catch (error) {
     console.error('OpenPencil MCP import failure', error)
     res.statusCode = 200

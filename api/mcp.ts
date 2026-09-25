@@ -47,11 +47,13 @@ async function getMcpHandler() {
           { name: 'open-pencil-remote', version: '0.15.1' },
           { capabilities: { tools: {} } },
         )
+
         registerTools(server, {
           policy: { allowEval: false, disabledTools: [] },
           mcpRoot: null,
           sendRPC: sendHeadlessRPC,
         })
+
         return server
       })
     })().catch((error) => {
@@ -59,16 +61,19 @@ async function getMcpHandler() {
       throw error
     })
   }
+
   return mcpHandlerPromise
 }
 
 export default async function handler(req: any, res: any) {
   cors(res)
+
   if (req.method === 'OPTIONS') {
     res.statusCode = 204
     res.end()
     return
   }
+
   try {
     const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readBody(req)
     const headers = new Headers()
@@ -76,11 +81,22 @@ export default async function handler(req: any, res: any) {
       if (Array.isArray(value)) headers.set(key, value.join(', '))
       else if (value != null) headers.set(key, String(value))
     }
-    const request = new Request('https://openpencil-remote.invalid/api/mcp', {
+
+    const hostHeader = req.headers?.host
+    const host = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader
+    const protoHeader = req.headers?.['x-forwarded-proto']
+    const proto = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || 'https'
+    const incomingUrl = typeof req.url === 'string' ? req.url : '/api/mcp'
+    const requestUrl = /^https?:\/\//i.test(incomingUrl)
+      ? incomingUrl
+      : `${proto}://${host || 'hyouka-openpencil-remote-v2-hyouka1.vercel.app'}${incomingUrl}`
+
+    const request = new Request(requestUrl, {
       method: req.method,
       headers,
       body: body && body.length > 0 ? body : undefined,
     })
+
     await writeResponse(res, await (await getMcpHandler()).fetch(request))
   } catch (error) {
     console.error('OpenPencil MCP request failure', error)
