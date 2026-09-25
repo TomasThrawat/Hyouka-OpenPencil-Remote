@@ -9,6 +9,14 @@ import {
   type DiagnosticsRetention
 } from './state'
 
+export {
+  diagnosticsRetentionPresets,
+  DIAGNOSTICS_RETENTION_DEFAULT,
+  DIAGNOSTICS_RETENTION_MAX,
+  DIAGNOSTICS_RETENTION_MIN,
+  resolveDiagnosticsRetention
+} from './state'
+
 const diagnosticsCount = ref(0)
 const diagnosticsSize = ref(0)
 
