@@ -1,0 +1,33 @@
+name: Register Remote OpenPencil MCP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Replace custom OpenPencil toolkit
+        env:
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_PROJECT_API_KEY }}
+          MCP_URL: https://hyouka-openpencil-remote-v2.vercel.app/api/mcp
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Deleting old CUSTOM_OPENPENCIL registration..."
+          curl --fail-with-body -sS -X DELETE             "https://backend.composio.dev/api/v3.1/custom/toolkits/CUSTOM_OPENPENCIL"             -H "x-api-key: ${COMPOSIO_API_KEY}"             -H "Content-Type: application/json"
+
+          echo
+          echo "Registering Vercel Remote MCP..."
+          curl --fail-with-body -sS -X POST             "https://backend.composio.dev/api/v3.1/custom/toolkits/upsert"             -H "x-api-key: ${COMPOSIO_API_KEY}"             -H "Content-Type: application/json"             --data "$(printf '%s' "{\"slug\":\"OPENPENCIL\",\"toolkit_config\":{\"name\":\"OpenPencil\",\"app_url\":\"%s\",\"auth_schemes\":[{\"mode\":\"NO_AUTH\"}]}}" "${MCP_URL}")"
+
+          echo
+          echo "Syncing remote MCP tools..."
+          curl --fail-with-body -sS -X POST             "https://backend.composio.dev/api/v3.1/custom/toolkits/sync"             -H "x-api-key: ${COMPOSIO_API_KEY}"             -H "Content-Type: application/json"             --data '{"slug":"CUSTOM_OPENPENCIL"}'
+
+          echo
+          echo "Remote OpenPencil MCP registration completed."
