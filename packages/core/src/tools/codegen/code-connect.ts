@@ -1,6 +1,6 @@
 import * as v from 'valibot'
 
-import type { FigmaAPI } from '#core/figma-api'
+import type { FigmaAPI, FigmaNodeProxy } from '#core/figma-api'
 import { getPluginData, setPluginData } from '#core/figma-api/plugin-data'
 import type { SceneNode } from '@open-pencil/scene-graph'
 import { defineTool, nodeSummary } from '#core/tools/schema'
@@ -45,7 +45,7 @@ function readStore(node: SceneNode): CodeConnectStore {
 
     return {
       version: CODE_CONNECT_VERSION,
-      mappings: candidate.mappings as Record<string, CodeConnectMapping>
+      mappings: candidate.mappings
     }
   } catch {
     return emptyStore()
@@ -57,13 +57,21 @@ function normalizeOptional(value: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined
 }
 
-function requireConnectableNode(figma: FigmaAPI, id: string): SceneNode {
-  const node = figma.graph.getNode(id)
-  if (!node) throw new Error(`Node "${id}" not found`)
-  if (node.type !== 'COMPONENT' && node.type !== 'COMPONENT_SET') {
+interface ConnectableNode {
+  raw: SceneNode
+  proxy: FigmaNodeProxy
+}
+
+function requireConnectableNode(figma: FigmaAPI, id: string): ConnectableNode {
+  const raw = figma.graph.getNode(id)
+  if (!raw) throw new Error("Node " + id + " not found")
+  if (raw.type !== 'COMPONENT' && raw.type !== 'COMPONENT_SET') {
     throw new Error('Code Connect mappings require a COMPONENT or COMPONENT_SET node')
   }
-  return node
+
+  const proxy = figma.getNodeById(id)
+  if (!proxy) throw new Error("Node " + id + " not found")
+  return { raw, proxy }
 }
 
 const connectFields = {
@@ -91,18 +99,18 @@ export const addCodeConnectMap = defineTool({
       componentName: args.component_name.trim(),
       source: args.source.trim(),
       snippet: normalizeOptional(args.snippet),
-      imports: args.imports?.map((item) => item.trim()).filter(Boolean),
+      imports: args.imports.map((item) => item.trim()).filter(Boolean),
       framework: normalizeOptional(args.framework),
       language: normalizeOptional(args.language),
       label: normalizeOptional(args.label)
     }
 
-    const store = readStore(node)
+    const store = readStore(node.raw)
     store.mappings[mappingKey(mapping)] = mapping
-    setPluginData(figma.graph, node, CODE_CONNECT_KEY, JSON.stringify(store))
+    setPluginData(figma.graph, node.raw, CODE_CONNECT_KEY, JSON.stringify(store))
 
     return {
-      node: nodeSummary(node),
+      node: nodeSummary(node.proxy),
       mapping,
       mappings: Object.values(store.mappings)
     }
@@ -162,7 +170,7 @@ export const removeCodeConnectMap = defineTool({
     const label = normalizeOptional(args.label)
     const framework = normalizeOptional(args.framework)
     const language = normalizeOptional(args.language)
-    const store = readStore(node)
+    const store = readStore(node.raw)
 
     const shouldRemove = (mapping: CodeConnectMapping) =>
       (label === undefined || mapping.label === label) &&
@@ -178,14 +186,14 @@ export const removeCodeConnectMap = defineTool({
     if (removed > 0) {
       setPluginData(
         figma.graph,
-        node,
+        node.raw,
         CODE_CONNECT_KEY,
         JSON.stringify({ ...store, mappings: remainingMappings })
       )
     }
 
     return {
-      node: nodeSummary(node),
+      node: nodeSummary(node.proxy),
       removed,
       remaining: Object.values(remainingMappings)
     }

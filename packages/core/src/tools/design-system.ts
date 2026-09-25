@@ -1,6 +1,6 @@
 import * as v from 'valibot'
 
-import { getComponents } from '#core/tools/read/components'
+import { getComponents, type GetComponentsResult } from '#core/tools/read/components'
 import { defineTool } from '#core/tools/schema'
 
 type SearchKind = 'components' | 'variables'
@@ -39,7 +39,7 @@ export const searchDesignSystem = defineTool({
   name: 'search_design_system',
   description:
     'Search the current OpenPencil design system in one call. Finds reusable document/library components and local variables across multiple search intents, ranked by name relevance.',
-  execution: { kind: 'sync', mutation: 'none' },
+  execution: { kind: 'async', mutation: 'none' },
   input: v.object({
     queries: v.pipe(
       v.array(v.pipe(v.string(), v.minLength(1))),
@@ -60,7 +60,7 @@ export const searchDesignSystem = defineTool({
 
     if (args.include !== 'variables') {
       for (const query of args.queries) {
-        const response = await getComponents.execute(figma, { name: query, source: 'all', limit: args.limit })
+        const response = (await getComponents.execute(figma, { name: query, source: 'all', limit: args.limit })) as GetComponentsResult
         for (const component of response.components) {
           results.push({
             kind: 'components',

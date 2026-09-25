@@ -1,4 +1,3 @@
-import { useLocalStorage } from '@vueuse/core'
 import { computed, ref } from 'vue'
 
 import { diagnostics } from './recorder'
@@ -6,14 +5,12 @@ import {
   diagnosticsEnabled,
   diagnosticsRetention,
   diagnosticsRetentionPresets,
-  DIAGNOSTICS_RETENTION_DEFAULT,
-  DIAGNOSTICS_RETENTION_MAX,
-  DIAGNOSTICS_RETENTION_MIN,
-  resolveDiagnosticsRetention,
   usageEnabled,
   type DiagnosticsRetention
 } from './state'
 
+const diagnosticsCount = ref(0)
+const diagnosticsSize = ref(0)
 
 export function useDiagnosticsSettings() {
   return {

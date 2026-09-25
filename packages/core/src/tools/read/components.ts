@@ -4,7 +4,7 @@ import { getComponentCatalog } from '#core/tools/component-catalog'
 import { toolNumber } from '#core/tools/input'
 import { defineTool } from '#core/tools/schema'
 
-interface DocumentComponentResult {
+export interface DocumentComponentResult {
   id: string
   name: string
   type: string
@@ -12,7 +12,7 @@ interface DocumentComponentResult {
   source: 'document'
 }
 
-interface LibraryComponentResult {
+export interface LibraryComponentResult {
   libraryId: string
   libraryName: string
   revisionId: string
@@ -23,6 +23,11 @@ interface LibraryComponentResult {
   source: 'library'
   enabled: boolean
   priority: number
+}
+
+export interface GetComponentsResult {
+  count: number
+  components: Array<DocumentComponentResult | LibraryComponentResult>
 }
 
 export const getComponents = defineTool({
