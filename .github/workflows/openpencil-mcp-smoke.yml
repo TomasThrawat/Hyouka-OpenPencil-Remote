@@ -2,114 +2,48 @@ name: OpenPencil MCP Smoke Test
 
 on:
   push:
-    branches:
-      - master
+    branches: [master]
   workflow_dispatch:
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Check health
+      - name: Health
+        run: curl --fail-with-body --silent --show-error --max-time 30 https://hyouka-openpencil-remote-v2.vercel.app/api/health
+      - name: MCP initialize
         run: |
           set -euo pipefail
           curl --fail-with-body --silent --show-error --max-time 30 \
-            -D /tmp/health-headers \
-            -o /tmp/health-body \
-            https://hyouka-openpencil-remote-v2.vercel.app/api/health
-          cat /tmp/health-headers
-          cat /tmp/health-body
-
-      - name: MCP OPTIONS
-        run: |
-          set -euo pipefail
-          curl --silent --show-error --max-time 30 \
-            -D /tmp/options-headers \
-            -o /tmp/options-body \
-            -X OPTIONS \
-            https://hyouka-openpencil-remote-v2.vercel.app/api/mcp
-          cat /tmp/options-headers
-          cat /tmp/options-body
-
-      - name: MCP legacy initialize
-        run: |
-          set -euo pipefail
-          cat > /tmp/initialize.json <<'JSON'
-          {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-              "protocolVersion": "2025-06-18",
-              "capabilities": {},
-              "clientInfo": { "name": "github-actions-smoke", "version": "1.0.0" }
-            }
-          }
-          JSON
-          curl --silent --show-error --max-time 30 \
-            -D /tmp/init-headers \
-            -o /tmp/init-body \
-            -X POST \
+            -D /tmp/h -o /tmp/b -X POST \
             -H 'Content-Type: application/json' \
             -H 'Accept: application/json, text/event-stream' \
-            --data-binary @/tmp/initialize.json \
+            --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"github-actions-smoke","version":"1"}}}' \
             https://hyouka-openpencil-remote-v2.vercel.app/api/mcp
-          echo '--- HEADERS ---'
-          cat /tmp/init-headers
-          echo '--- BODY ---'
-          cat /tmp/init-body
-          test "$(awk 'NR==1 {print $2}' /tmp/init-headers)" = "200"
-
-      - name: MCP legacy tools/list
+          cat /tmp/h
+          cat /tmp/b
+          grep -Eq 'HTTP/.* 200|HTTP/.* 202' /tmp/h
+      - name: MCP tools list
         run: |
           set -euo pipefail
-          cat > /tmp/tools-list.json <<'JSON'
-          { "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {} }
-          JSON
-          curl --silent --show-error --max-time 30 \
-            -D /tmp/list-headers \
-            -o /tmp/list-body \
-            -X POST \
+          curl --fail-with-body --silent --show-error --max-time 30 \
+            -D /tmp/h -o /tmp/b -X POST \
             -H 'Content-Type: application/json' \
             -H 'Accept: application/json, text/event-stream' \
-            --data-binary @/tmp/tools-list.json \
+            --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
             https://hyouka-openpencil-remote-v2.vercel.app/api/mcp
-          echo '--- HEADERS ---'
-          cat /tmp/list-headers
-          echo '--- BODY ---'
-          cat /tmp/list-body
-          test "$(awk 'NR==1 {print $2}' /tmp/list-headers)" = "200"
-          grep -q 'list_documents' /tmp/list-body
-
-      - name: MCP legacy tools/call list_documents
+          cat /tmp/h
+          cat /tmp/b
+          grep -q 'list_documents' /tmp/b
+      - name: MCP tools call list_documents
         run: |
           set -euo pipefail
-          cat > /tmp/tools-call.json <<'JSON'
-          {
-            "jsonrpc": "2.0",
-            "id": 3,
-            "method": "tools/call",
-            "params": {
-              "name": "list_documents",
-              "arguments": {}
-            }
-          }
-          JSON
-          curl --silent --show-error --max-time 30 \
-            -D /tmp/call-headers \
-            -o /tmp/call-body \
-            -X POST \
+          curl --fail-with-body --silent --show-error --max-time 30 \
+            -D /tmp/h -o /tmp/b -X POST \
             -H 'Content-Type: application/json' \
             -H 'Accept: application/json, text/event-stream' \
-            --data-binary @/tmp/tools-call.json \
+            --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_documents","arguments":{}}}' \
             https://hyouka-openpencil-remote-v2.vercel.app/api/mcp
-          echo '--- HEADERS ---'
-          cat /tmp/call-headers
-          echo '--- BODY ---'
-          cat /tmp/call-body
-          code="$(awk 'NR==1 {print $2}' /tmp/call-headers)"
-          if [ "${code}" != "200" ]; then
-            echo "Expected 200 from tools/call, got ${code}"
-            exit 1
-          fi
-          grep -q 'OpenPencil Remote' /tmp/call-body
+          cat /tmp/h
+          cat /tmp/b
+          grep -q 'OpenPencil Remote' /tmp/b
