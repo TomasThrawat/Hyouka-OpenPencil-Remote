@@ -39,7 +39,7 @@ async function loadHandlers(): Promise<{
       import('@/app/tabs'),
     ]).then(([figmaFactory, handlers, tabs]) => {
       const { handleRequest } = handlers.createAutomationCommandHandlers(
-        figmaFactory.makeFigmaFromStore
+        figmaFactory.makeFigmaFromStore,
       )
       return {
         handleRequest,
@@ -74,7 +74,7 @@ async function executeOperation(operation: {
     const result = await handleRequest(
       getActiveStore(),
       operation.command,
-      operation.args
+      operation.args,
     )
     await sendReply({ reqId: operation.reqId, ok: true, result })
   } catch (error) {
@@ -119,12 +119,10 @@ async function poll(): Promise<void> {
       console.warn('[OpenPencil Remote] Bridge poll failed', response.status)
     }
   } catch (error) {
-    if (!stopped) {
-      console.warn(
-        '[OpenPencil Remote] Bridge poll error',
-        error instanceof Error ? error.message : String(error)
-      )
-    }
+    console.warn(
+      '[OpenPencil Remote] Bridge poll error',
+      error instanceof Error ? error.message : String(error),
+    )
   } finally {
     inFlight = false
     schedulePoll()
@@ -144,6 +142,6 @@ export function startRemoteCanvasBridge(): void {
       active = false
       clearPollTimer()
     },
-    { once: true }
+    { once: true },
   )
 }
