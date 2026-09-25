@@ -1,4 +1,13 @@
-import state from './_state.js'
+import {
+  OPENPENCIL_BRIDGE_KEY,
+  supabaseRpc
+} from './_supabase.js'
+
+type RemoteOperation = {
+  req_id: string
+  command: string
+  args?: unknown
+}
 
 function cors(res: any): void {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -6,7 +15,7 @@ function cors(res: any): void {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 }
 
-export default function handler(req: any, res: any): void {
+export default async function handler(req: any, res: any): Promise<void> {
   cors(res)
 
   if (req.method === 'OPTIONS') {
@@ -22,18 +31,30 @@ export default function handler(req: any, res: any): void {
     return
   }
 
-  state.lastBrowserSeen = Date.now()
+  try {
+    const rows = await supabaseRpc<RemoteOperation[]>(
+      'openpencil_claim_operation',
+      { p_bridge_key: OPENPENCIL_BRIDGE_KEY }
+    )
 
-  const operation = state.queue.shift()
+    const operation = rows?.[0]
+    if (!operation) {
+      res.statusCode = 204
+      res.end()
+      return
+    }
 
-  if (!operation) {
-    res.statusCode = 204
-    res.end()
-    return
+    res.statusCode = 200
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
+    res.setHeader('Cache-Control', 'no-store')
+    res.end(JSON.stringify(operation))
+  } catch (error) {
+    res.statusCode = 500
+    res.setHeader('Content-Type', 'application/json')
+    res.end(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : String(error)
+      })
+    )
   }
-
-  res.statusCode = 200
-  res.setHeader('Content-Type', 'application/json; charset=utf-8')
-  res.setHeader('Cache-Control', 'no-store')
-  res.end(JSON.stringify(operation))
 }

@@ -3,46 +3,65 @@ import { randomUUID } from 'node:crypto'
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server'
 import { registerTools } from '@open-pencil/mcp'
 
-import state, { type RemoteOperation } from './_state.js'
+import {
+  OPENPENCIL_BRIDGE_KEY,
+  supabaseRpc
+} from './_supabase.js'
 
-const MCP_WAIT_TIMEOUT_MS = 50_000
-const MAX_QUEUE_LENGTH = 64
+const MCP_WAIT_TIMEOUT_MS = 45_000
+const OPERATION_POLL_INTERVAL_MS = 400
 const MAX_BODY_BYTES = 2 * 1024 * 1024
 
-function cors(res: any): void {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'Content-Type, Authorization, Mcp-Session-Id, Mcp-Protocol-Version'
-  )
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+type OperationState = {
+  status: 'pending' | 'claimed' | 'completed' | 'missing'
+  result?: unknown
+  error?: string | null
 }
 
-function sendRPC(body: Record<string, unknown>): Promise<unknown> {
-  if (state.queue.length >= MAX_QUEUE_LENGTH) {
-    return Promise.reject(new Error('OpenPencil remote bridge queue is full'))
-  }
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
+async function sendRPC(body: Record<string, unknown>): Promise<unknown> {
   const reqId = randomUUID()
-  const operation: RemoteOperation = {
-    reqId,
-    command: typeof body.command === 'string' ? body.command : '',
-    args: body.args
+  const command = typeof body.command === 'string' ? body.command : ''
+  const args = body.args ?? null
+
+  await supabaseRpc('openpencil_enqueue_operation', {
+    p_req_id: reqId,
+    p_command: command,
+    p_args: args,
+    p_bridge_key: OPENPENCIL_BRIDGE_KEY
+  })
+
+  const deadline = Date.now() + MCP_WAIT_TIMEOUT_MS
+
+  while (Date.now() < deadline) {
+    const state = await supabaseRpc<OperationState>(
+      'openpencil_get_operation',
+      {
+        p_req_id: reqId,
+        p_bridge_key: OPENPENCIL_BRIDGE_KEY
+      }
+    )
+
+    if (state.status === 'completed') {
+      if (state.error) {
+        throw new Error(state.error)
+      }
+      return state.result
+    }
+
+    if (state.status === 'missing') {
+      throw new Error('OpenPencil remote operation disappeared')
+    }
+
+    await sleep(OPERATION_POLL_INTERVAL_MS)
   }
 
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      state.pending.delete(reqId)
-      reject(
-        new Error(
-          'OpenPencil browser editor did not respond within 50 seconds. Keep the OpenPencil web editor open and try again.'
-        )
-      )
-    }, MCP_WAIT_TIMEOUT_MS)
-
-    state.pending.set(reqId, { resolve, reject, timer })
-    state.queue.push(operation)
-  })
+  throw new Error(
+    'OpenPencil browser editor did not respond within 45 seconds. Keep the OpenPencil web editor open and try again.'
+  )
 }
 
 const mcpHandler = createMcpHandler(() => {
@@ -76,7 +95,9 @@ async function readBody(req: any): Promise<Buffer> {
   for await (const chunk of req) {
     const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     size += data.length
-    if (size > MAX_BODY_BYTES) throw new Error('Request body too large')
+    if (size > MAX_BODY_BYTES) {
+      throw new Error('Request body too large')
+    }
     chunks.push(data)
   }
 
@@ -86,9 +107,16 @@ async function readBody(req: any): Promise<Buffer> {
 async function writeResponse(res: any, response: Response): Promise<void> {
   res.statusCode = response.status
   response.headers.forEach((value, key) => res.setHeader(key, value))
+  res.end(Buffer.from(await response.arrayBuffer()))
+}
 
-  const buffer = Buffer.from(await response.arrayBuffer())
-  res.end(buffer)
+function cors(res: any): void {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, Mcp-Session-Id, Mcp-Protocol-Version'
+  )
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
 }
 
 export default async function handler(req: any, res: any): Promise<void> {
@@ -101,22 +129,30 @@ export default async function handler(req: any, res: any): Promise<void> {
   }
 
   try {
-    const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readBody(req)
-    const headers = new Headers()
+    const body =
+      req.method === 'GET' || req.method === 'HEAD'
+        ? undefined
+        : await readBody(req)
 
+    const headers = new Headers()
     for (const [key, value] of Object.entries(req.headers ?? {})) {
-      if (Array.isArray(value)) headers.set(key, value.join(', '))
-      else if (value != null) headers.set(key, String(value))
+      if (Array.isArray(value)) {
+        headers.set(key, value.join(', '))
+      } else if (value != null) {
+        headers.set(key, String(value))
+      }
     }
 
-    const request = new Request('https://openpencil-remote.invalid/api/mcp', {
-      method: req.method,
-      headers,
-      body: body && body.length > 0 ? body : undefined
-    })
+    const request = new Request(
+      'https://openpencil-remote.invalid/api/mcp',
+      {
+        method: req.method,
+        headers,
+        body: body && body.length > 0 ? body : undefined
+      }
+    )
 
-    const response = await mcpHandler.fetch(request)
-    await writeResponse(res, response)
+    await writeResponse(res, await mcpHandler.fetch(request))
   } catch (error) {
     res.statusCode = 500
     res.setHeader('Content-Type', 'application/json')

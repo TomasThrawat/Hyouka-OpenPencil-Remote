@@ -1,10 +1,7 @@
-import state from './_state.js'
-
-function cors(res: any): void {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-}
+import {
+  OPENPENCIL_BRIDGE_KEY,
+  supabaseRpc
+} from './_supabase.js'
 
 async function readBody(req: any): Promise<any> {
   if (req.body !== undefined && req.body !== null) {
@@ -17,6 +14,12 @@ async function readBody(req: any): Promise<any> {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+}
+
+function cors(res: any): void {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 }
 
 export default async function handler(req: any, res: any): Promise<void> {
@@ -45,26 +48,19 @@ export default async function handler(req: any, res: any): Promise<void> {
       return
     }
 
-    const pending = state.pending.get(reqId)
-    if (!pending) {
-      res.statusCode = 404
-      res.end(JSON.stringify({ error: 'Pending request not found or expired' }))
-      return
-    }
-
-    clearTimeout(pending.timer)
-    state.pending.delete(reqId)
-    pending.resolve({
-      ok: body.ok !== false,
-      result: body.result,
-      error: typeof body.error === 'string' ? body.error : undefined
+    await supabaseRpc('openpencil_complete_operation', {
+      p_req_id: reqId,
+      p_ok: body.ok !== false,
+      p_result: body.ok === false ? null : (body.result ?? null),
+      p_error: body.ok === false ? (body.error ?? 'Unknown bridge error') : null,
+      p_bridge_key: OPENPENCIL_BRIDGE_KEY
     })
 
     res.statusCode = 200
     res.setHeader('Content-Type', 'application/json')
     res.end(JSON.stringify({ ok: true }))
   } catch (error) {
-    res.statusCode = 400
+    res.statusCode = 500
     res.setHeader('Content-Type', 'application/json')
     res.end(
       JSON.stringify({
