@@ -22,12 +22,13 @@ import RecoveryDialog from '@/components/recovery/RecoveryDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 import AppShell from '@/components/shell/AppShell.vue'
 import AppToast from '@/components/shell/AppToast.vue'
+import { startRemoteCanvasBridge } from '@/remote-mcp'
 
 const store = useEditorStore()
 const { updates, locale } = useI18n()
 
 useHead({
-  titleTemplate: (title) => (title ? `${title} — OpenPencil` : 'OpenPencil'),
+  titleTemplate: (title) => (title ? `${title} – OpenPencil` : 'OpenPencil'),
   htmlAttrs: {
     lang: locale,
     'data-motion': computed(() => (animationsEnabled.value ? 'full' : 'off'))
@@ -45,6 +46,7 @@ onMounted(() => {
   toast.setupGlobalErrorHandler()
   scheduleStartupUpdateCheck(updates)
   void kickSyncEngine()
+  startRemoteCanvasBridge()
 })
 </script>
 

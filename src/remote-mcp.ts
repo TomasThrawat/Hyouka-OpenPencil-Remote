@@ -124,10 +124,10 @@ async function poll(): Promise<void> {
     }
   } catch (error) {
     if (!stopped) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (!message.includes('aborted') && !message.includes('TimeoutError')) {
-        console.warn('[OpenPencil Remote] Bridge poll error', message)
-      }
+      console.warn(
+        '[OpenPencil Remote] Bridge poll error',
+        error instanceof Error ? error.message : String(error)
+      )
     }
   } finally {
     inFlight = false
@@ -136,8 +136,7 @@ async function poll(): Promise<void> {
 }
 
 export function startRemoteCanvasBridge(): void {
-  if (typeof window === 'undefined' || !import.meta.env.PROD || active) return
-
+  if (typeof window === 'undefined' || active) return
   active = true
   stopped = false
   void poll()
