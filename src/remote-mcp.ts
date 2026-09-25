@@ -1,3 +1,5 @@
+import { IS_BROWSER } from './constants'
+
 let active = false
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let stopped = false
@@ -136,7 +138,7 @@ async function poll(): Promise<void> {
 }
 
 export function startRemoteCanvasBridge(): void {
-  if (typeof window === 'undefined' || active) return
+  if (!IS_BROWSER || active) return
   active = true
   stopped = false
   void poll()
