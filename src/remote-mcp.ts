@@ -1,16 +1,18 @@
-import { makeFigmaFromStore } from '@/app/automation/bridge/figma-factory'
-import { createAutomationCommandHandlers } from '@/app/automation/bridge/handlers'
-import { getActiveStore } from '@/app/tabs'
-
 let active = false
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let stopped = false
 let inFlight = false
+let loadingHandlers: Promise<{
+  handleRequest: (
+    store: unknown,
+    command: string,
+    args: unknown
+  ) => Promise<unknown>
+  getActiveStore: () => unknown
+}> | null = null
 
 const POLL_INTERVAL_MS = 750
 const REQUEST_TIMEOUT_MS = 20_000
-
-const { handleRequest } = createAutomationCommandHandlers(makeFigmaFromStore)
 
 function clearPollTimer(): void {
   if (!pollTimer) return
@@ -24,6 +26,32 @@ function schedulePoll(delayMs = POLL_INTERVAL_MS): void {
     pollTimer = null
     void poll()
   }, delayMs)
+}
+
+async function loadHandlers(): Promise<{
+  handleRequest: (
+    store: unknown,
+    command: string,
+    args: unknown
+  ) => Promise<unknown>
+  getActiveStore: () => unknown
+}> {
+  if (!loadingHandlers) {
+    loadingHandlers = Promise.all([
+      import('@/app/automation/bridge/figma-factory'),
+      import('@/app/automation/bridge/handlers'),
+      import('@/app/tabs')
+    ]).then(([figmaFactory, handlers, tabs]) => {
+      const { handleRequest } = handlers.createAutomationCommandHandlers(
+        figmaFactory.makeFigmaFromStore
+      )
+      return {
+        handleRequest,
+        getActiveStore: tabs.getActiveStore
+      }
+    })
+  }
+  return loadingHandlers
 }
 
 async function sendReply(body: Record<string, unknown>): Promise<void> {
@@ -46,7 +74,12 @@ async function executeOperation(operation: {
   args?: unknown
 }): Promise<void> {
   try {
-    const result = await handleRequest(getActiveStore(), operation.command, operation.args)
+    const { handleRequest, getActiveStore } = await loadHandlers()
+    const result = await handleRequest(
+      getActiveStore(),
+      operation.command,
+      operation.args
+    )
     await sendReply({ reqId: operation.reqId, ok: true, result })
   } catch (error) {
     await sendReply({
@@ -103,7 +136,7 @@ async function poll(): Promise<void> {
 }
 
 export function startRemoteCanvasBridge(): void {
-  if (!import.meta.env.PROD || active) return
+  if (typeof window === 'undefined' || !import.meta.env.PROD || active) return
 
   active = true
   stopped = false

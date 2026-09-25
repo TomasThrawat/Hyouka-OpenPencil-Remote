@@ -14,8 +14,9 @@ import router from './router'
 
 /**
  * Application entry, loaded by `main.ts` only after the support gate passes.
- * Keeping it behind a dynamic import means an unsupported engine never
- * evaluates the app bundle and can still show the gate's guidance.
+ * The remote MCP bridge is started before the support gate failure return so
+ * a web editor can remain remotely controllable even when a non-fatal support
+ * diagnostic blocks the rest of boot.
  */
 export async function boot(): Promise<void> {
   preloadFonts()
@@ -24,6 +25,16 @@ export async function boot(): Promise<void> {
   const bootErrors = observeBootErrors(app)
   app.use(router).use(head).use(createRetainedScopePlugin()).mount('#app')
 
+  // The web deployment owns the remote MCP bridge. Start it immediately
+  // after mount so support-gate failures cannot leave the editor unconnected.
+  if (!IS_TAURI && import.meta.env.PROD) {
+    void import('./remote-mcp')
+      .then(({ startRemoteCanvasBridge }) => startRemoteCanvasBridge())
+      .catch((error) => {
+        console.warn('[OpenPencil Remote] Bridge startup failed', error)
+      })
+  }
+
   await router.isReady()
   await nextTick()
 
@@ -31,17 +42,6 @@ export async function boot(): Promise<void> {
   if (failure) {
     await reportBootFailure(failure.error)
     return
-  }
-
-  // The web deployment owns the remote MCP bridge. Do not gate this behind a
-  // VITE_* build variable: when that variable is absent during CI, Vite can
-  // constant-fold the import away and silently ship an editor with no bridge.
-  if (!IS_TAURI && import.meta.env.PROD) {
-    void import('./remote-mcp')
-      .then(({ startRemoteCanvasBridge }) => startRemoteCanvasBridge())
-      .catch((error) => {
-        console.warn('[OpenPencil Remote] Bridge startup failed', error)
-      })
   }
 
   if (!IS_TAURI) {
