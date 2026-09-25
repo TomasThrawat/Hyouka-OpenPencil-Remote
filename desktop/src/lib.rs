@@ -1,9 +1,12 @@
 mod credentials;
 mod deep_link;
 mod fig_container;
+#[cfg(not(target_os = "android"))]
 mod fonts;
 mod http;
+#[cfg(not(target_os = "android"))]
 mod menu;
+#[cfg(not(target_os = "android"))]
 mod menu_events;
 #[cfg(target_os = "macos")]
 mod window;
@@ -14,9 +17,12 @@ use credentials::{
 };
 use deep_link::path_matches_suffix;
 use fig_container::build_fig_file;
+#[cfg(not(target_os = "android"))]
 use fonts::{list_system_fonts, load_system_font};
 use http::proxy_http_request;
+#[cfg(not(target_os = "android"))]
 use menu::{install_app_menu, native_menu_checked, set_native_menu_checked};
+#[cfg(not(target_os = "android"))]
 use menu_events::handle_menu_event;
 use std::{
     path::{Path, PathBuf},
@@ -24,6 +30,48 @@ use std::{
 };
 use tauri::{Emitter, Manager};
 use tauri_plugin_fs::FsExt;
+
+#[cfg(target_os = "android")]
+#[tauri::command]
+async fn list_system_fonts() -> Vec<serde_json::Value> {
+    Vec::new()
+}
+
+#[cfg(target_os = "android")]
+#[tauri::command]
+async fn load_system_font(
+    _family: String,
+    _style: String,
+) -> Result<tauri::ipc::Response, String> {
+    Err("System font loading is unavailable on Android".to_string())
+}
+
+#[cfg(target_os = "android")]
+fn install_app_menu<R: tauri::Runtime>(
+    _app: &tauri::AppHandle<R>,
+    _recent_files: &[String],
+) -> tauri::Result<()> {
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+#[tauri::command]
+fn native_menu_checked<R: tauri::Runtime>(
+    _app: tauri::AppHandle<R>,
+    _id: String,
+) -> Result<bool, String> {
+    Err("Native application menus are unavailable on Android".to_string())
+}
+
+#[cfg(target_os = "android")]
+#[tauri::command]
+fn set_native_menu_checked<R: tauri::Runtime>(
+    _app: tauri::AppHandle<R>,
+    _id: String,
+    _checked: bool,
+) -> Result<(), String> {
+    Err("Native application menus are unavailable on Android".to_string())
+}
 #[cfg(target_os = "macos")]
 use window::show_main_window;
 
@@ -320,10 +368,14 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_os::init())
-        .on_menu_event(|app, event| {
-            handle_menu_event(app, event.id().0.as_str());
-        })
+        .plugin(tauri_plugin_os::init());
+
+    #[cfg(not(target_os = "android"))]
+    let builder = builder.on_menu_event(|app, event| {
+        handle_menu_event(app, event.id().0.as_str());
+    });
+
+    builder
         .setup(|app| {
             queue_open_paths(app.handle(), startup_open_paths());
 
