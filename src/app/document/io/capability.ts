@@ -10,7 +10,7 @@ export function supportsFileSystemAccess(): boolean {
 
 /**
  * Opens the browser save picker. Resolves to null when the browser has no picker, and rejects
- * with `AbortError` when the user cancels so callers can keep cancel and failure distinct.
+ * with AbortError when the user cancels so callers can keep cancel and failure distinct.
  */
 export async function pickBrowserSaveFile(
   options: FilePickerOptions
