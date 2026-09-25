@@ -1,10 +1,1 @@
-{
-  "version": 2,
-  "framework": "vite",
-  "installCommand": "bun install",
-  "buildCommand": "bun run build:packages && vite build",
-  "outputDirectory": "dist",
-  "env": {
-    "VITE_OPENPENCIL_REMOTE_MCP": "true"
-  }
-}
+{"version":2,"functions":{"api/*.ts":{"maxDuration":60}}}

@@ -1,22 +1,120 @@
-import { connectAutomation } from '@/app/automation/bridge/server'
+import { makeFigmaFromStore } from '@/app/automation/bridge/figma-factory'
+import { createAutomationCommandHandlers } from '@/app/automation/bridge/handlers'
 import { getActiveStore } from '@/app/tabs'
 
-let disconnect: (() => void) | null = null
+let active = false
+let pollTimer: ReturnType<typeof setTimeout> | null = null
+let stopped = false
+let inFlight = false
+
+const POLL_INTERVAL_MS = 750
+const REQUEST_TIMEOUT_MS = 20_000
+
+const { handleRequest } = createAutomationCommandHandlers(makeFigmaFromStore)
+
+function clearPollTimer(): void {
+  if (!pollTimer) return
+  clearTimeout(pollTimer)
+  pollTimer = null
+}
+
+function schedulePoll(delayMs = POLL_INTERVAL_MS): void {
+  if (stopped || pollTimer) return
+  pollTimer = setTimeout(() => {
+    pollTimer = null
+    void poll()
+  }, delayMs)
+}
+
+async function sendReply(body: Record<string, unknown>): Promise<void> {
+  try {
+    await fetch('/api/reply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify(body),
+      keepalive: true
+    })
+  } catch (error) {
+    console.warn('[OpenPencil Remote] Failed to send bridge response', error)
+  }
+}
+
+async function executeOperation(operation: {
+  reqId: string
+  command: string
+  args?: unknown
+}): Promise<void> {
+  try {
+    const result = await handleRequest(getActiveStore(), operation.command, operation.args)
+    await sendReply({ reqId: operation.reqId, ok: true, result })
+  } catch (error) {
+    await sendReply({
+      reqId: operation.reqId,
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })
+  }
+}
+
+async function poll(): Promise<void> {
+  if (stopped || inFlight) return
+  inFlight = true
+
+  try {
+    const response = await fetch('/api/poll', {
+      method: 'GET',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      headers: { Accept: 'application/json' }
+    })
+
+    if (response.status === 200) {
+      const operation = (await response.json()) as {
+        reqId?: unknown
+        command?: unknown
+        args?: unknown
+      }
+
+      if (
+        typeof operation.reqId === 'string' &&
+        typeof operation.command === 'string'
+      ) {
+        await executeOperation({
+          reqId: operation.reqId,
+          command: operation.command,
+          args: operation.args
+        })
+      }
+    } else if (response.status !== 204) {
+      console.warn('[OpenPencil Remote] Bridge poll failed', response.status)
+    }
+  } catch (error) {
+    if (!stopped) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (!message.includes('aborted') && !message.includes('TimeoutError')) {
+        console.warn('[OpenPencil Remote] Bridge poll error', message)
+      }
+    }
+  } finally {
+    inFlight = false
+    schedulePoll()
+  }
+}
 
 export function startRemoteCanvasBridge(): void {
-  if (!import.meta.env.PROD) return
-  if (disconnect) return
+  if (!import.meta.env.PROD || active) return
 
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const url = `${protocol}//${window.location.host}/api/mcp`
-
-  disconnect = connectAutomation(getActiveStore, null, url).disconnect
+  active = true
+  stopped = false
+  void poll()
 
   window.addEventListener(
     'beforeunload',
     () => {
-      disconnect?.()
-      disconnect = null
+      stopped = true
+      active = false
+      clearPollTimer()
     },
     { once: true }
   )

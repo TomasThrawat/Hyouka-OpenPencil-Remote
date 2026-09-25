@@ -1,40 +1,47 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { WebSocketServer, WebSocket } from 'ws'
+import { randomUUID } from 'node:crypto'
+
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server'
 import { registerTools } from '@open-pencil/mcp'
 
-type Pending = {
-  resolve: (value: unknown) => void
-  reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
+import state, { type RemoteOperation } from './_state'
+
+const MCP_WAIT_TIMEOUT_MS = 50_000
+const MAX_QUEUE_LENGTH = 64
+const MAX_BODY_BYTES = 2 * 1024 * 1024
+
+function cors(res: any): void {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, Mcp-Session-Id, Mcp-Protocol-Version'
+  )
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
 }
 
-const pending = new Map<string, Pending>()
-let browser: WebSocket | null = null
-
 function sendRPC(body: Record<string, unknown>): Promise<unknown> {
-  const socket = browser
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
-    return Promise.reject(new Error('OpenPencil browser editor is not connected'))
+  if (state.queue.length >= MAX_QUEUE_LENGTH) {
+    return Promise.reject(new Error('OpenPencil remote bridge queue is full'))
   }
 
-  const id = crypto.randomUUID()
+  const reqId = randomUUID()
+  const operation: RemoteOperation = {
+    reqId,
+    command: typeof body.command === 'string' ? body.command : '',
+    args: body.args
+  }
 
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      pending.delete(id)
-      reject(new Error('Browser automation request timed out'))
-    }, 90_000)
+      state.pending.delete(reqId)
+      reject(
+        new Error(
+          'OpenPencil browser editor did not respond within 50 seconds. Keep the OpenPencil web editor open and try again.'
+        )
+      )
+    }, MCP_WAIT_TIMEOUT_MS)
 
-    pending.set(id, { resolve, reject, timer })
-
-    try {
-      socket.send(JSON.stringify({ ...body, type: 'request', id }))
-    } catch (error) {
-      clearTimeout(timer)
-      pending.delete(id)
-      reject(error instanceof Error ? error : new Error(String(error)))
-    }
+    state.pending.set(reqId, { resolve, reject, timer })
+    state.queue.push(operation)
   })
 }
 
@@ -56,55 +63,36 @@ const mcpHandler = createMcpHandler(() => {
   return server
 })
 
-function cors(res: ServerResponse): void {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'Content-Type, Authorization, Mcp-Session-Id, Mcp-Protocol-Version'
-  )
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
-}
+async function readBody(req: any): Promise<Buffer> {
+  if (req.body !== undefined && req.body !== null) {
+    if (Buffer.isBuffer(req.body)) return req.body
+    if (typeof req.body === 'string') return Buffer.from(req.body)
+    return Buffer.from(JSON.stringify(req.body))
+  }
 
-async function readBody(req: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = []
   let size = 0
 
   for await (const chunk of req) {
     const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     size += data.length
-    if (size > 2 * 1024 * 1024) throw new Error('Request body too large')
+    if (size > MAX_BODY_BYTES) throw new Error('Request body too large')
     chunks.push(data)
   }
 
   return Buffer.concat(chunks)
 }
 
-async function writeResponse(res: ServerResponse, response: Response): Promise<void> {
+async function writeResponse(res: any, response: Response): Promise<void> {
   res.statusCode = response.status
   response.headers.forEach((value, key) => res.setHeader(key, value))
 
-  if (!response.body) {
-    res.end()
-    return
-  }
-
-  const reader = response.body.getReader()
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      res.write(Buffer.from(value))
-    }
-  } finally {
-    res.end()
-  }
+  const buffer = Buffer.from(await response.arrayBuffer())
+  res.end(buffer)
 }
 
-const server = createServer(async (req, res) => {
+export default async function handler(req: any, res: any): Promise<void> {
   cors(res)
-
-  const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204
@@ -112,44 +100,22 @@ const server = createServer(async (req, res) => {
     return
   }
 
-  if (url.pathname === '/api/health' && req.method === 'GET') {
-    const connected = browser?.readyState === WebSocket.OPEN
-
-    res.setHeader('Content-Type', 'application/json')
-    res.end(
-      JSON.stringify({
-        status: connected ? 'ok' : 'no_app',
-        version: '0.15.1',
-        authRequired: false,
-        browserConnected: connected
-      })
-    )
-    return
-  }
-
-  if (url.pathname !== '/api/mcp') {
-    res.statusCode = 404
-    res.end('Not found')
-    return
-  }
-
   try {
     const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readBody(req)
     const headers = new Headers()
 
-    for (const [key, value] of Object.entries(req.headers)) {
+    for (const [key, value] of Object.entries(req.headers ?? {})) {
       if (Array.isArray(value)) headers.set(key, value.join(', '))
-      else if (value != null) headers.set(key, value)
+      else if (value != null) headers.set(key, String(value))
     }
 
-    const response = await mcpHandler.fetch(
-      new Request(url, {
-        method: req.method,
-        headers,
-        body: body && body.length > 0 ? body : undefined
-      })
-    )
+    const request = new Request('https://openpencil-remote.invalid/api/mcp', {
+      method: req.method,
+      headers,
+      body: body && body.length > 0 ? body : undefined
+    })
 
+    const response = await mcpHandler.fetch(request)
     await writeResponse(res, response)
   } catch (error) {
     res.statusCode = 500
@@ -160,63 +126,4 @@ const server = createServer(async (req, res) => {
       })
     )
   }
-})
-
-const wss = new WebSocketServer({ noServer: true })
-
-server.on('upgrade', (req, socket, head) => {
-  const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-
-  if (url.pathname !== '/api/mcp') {
-    socket.destroy()
-    return
-  }
-
-  wss.handleUpgrade(req, socket, head, (ws) => {
-    wss.emit('connection', ws, req)
-  })
-})
-
-wss.on('connection', (ws) => {
-  if (browser && browser !== ws && browser.readyState === WebSocket.OPEN) {
-    browser.close(1000, 'Replaced by a newer editor connection')
-  }
-
-  browser = ws
-
-  ws.on('message', (raw) => {
-    try {
-      const msg = JSON.parse(String(raw)) as Record<string, unknown>
-
-      if (msg.type === 'register') return
-      if (msg.type !== 'response' || typeof msg.id !== 'string') return
-
-      const waiter = pending.get(msg.id)
-      if (!waiter) return
-
-      pending.delete(msg.id)
-      clearTimeout(waiter.timer)
-
-      const result = { ...msg }
-      delete result.type
-      delete result.id
-      waiter.resolve(result)
-    } catch (error) {
-      console.warn('[OpenPencil Remote] Invalid browser message', error)
-    }
-  })
-
-  ws.on('close', () => {
-    if (browser === ws) browser = null
-
-    for (const [id, waiter] of pending) {
-      clearTimeout(waiter.timer)
-      waiter.reject(new Error('OpenPencil browser editor disconnected'))
-      pending.delete(id)
-    }
-  })
-
-  ws.on('error', () => undefined)
-})
-
-export default server
+}
