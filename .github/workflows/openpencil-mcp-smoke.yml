@@ -4,6 +4,11 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: "Optional deployed commit SHA to test"
+        required: false
+        type: string
 
 jobs:
   smoke:
@@ -13,7 +18,7 @@ jobs:
         env:
           OPENPENCIL_MCP_URL: https://hyouka-openpencil-remote-v2.vercel.app/api/mcp
           OPENPENCIL_HEALTH_URL: https://hyouka-openpencil-remote-v2.vercel.app/api/health
-          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
         run: |
           set -euo pipefail
           ready=0
@@ -36,7 +41,7 @@ jobs:
       - name: Health
         env:
           OPENPENCIL_HEALTH_URL: https://hyouka-openpencil-remote-v2.vercel.app/api/health
-          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
         run: |
           set -euo pipefail
           curl --fail-with-body --silent --show-error --max-time 30 "${OPENPENCIL_HEALTH_URL}?expected=${EXPECTED_SHA}" | tee /tmp/health.json
