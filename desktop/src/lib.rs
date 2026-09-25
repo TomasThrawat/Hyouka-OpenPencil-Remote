@@ -315,6 +315,22 @@ fn startup_open_paths() -> Vec<PathBuf> {
     open_paths_from_args(std::env::args().skip(1).collect(), &cwd)
 }
 
+#[cfg(not(target_os = "android"))]
+fn configure_platform_builder<R: tauri::Runtime>(
+    builder: tauri::Builder<R>,
+) -> tauri::Builder<R> {
+    builder.on_menu_event(|app, event| {
+        handle_menu_event(app, event.id().0.as_str());
+    })
+}
+
+#[cfg(target_os = "android")]
+fn configure_platform_builder<R: tauri::Runtime>(
+    builder: tauri::Builder<R>,
+) -> tauri::Builder<R> {
+    builder
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _ = fix_path_env::fix();
@@ -370,10 +386,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_os::init());
 
-    #[cfg(not(target_os = "android"))]
-    builder = builder.on_menu_event(|app, event| {
-        handle_menu_event(app, event.id().0.as_str());
-    });
+    builder = configure_platform_builder(builder);
 
     builder
         .setup(|app| {
