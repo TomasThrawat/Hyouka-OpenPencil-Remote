@@ -4,7 +4,7 @@ import { sendHeadlessRPC } from './headless'
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024
 
-const mcpHandler = (() => {
+const mcpHandler = createMcpHandler(() => {
   const server = new McpServer(
     { name: 'open-pencil-remote', version: '0.15.1' },
     { capabilities: { tools: {} } },
@@ -19,8 +19,8 @@ const mcpHandler = (() => {
     sendRPC: sendHeadlessRPC,
   })
 
-  return createMcpHandler(() => server)
-})()
+  return server
+})
 
 function cors(res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*')
